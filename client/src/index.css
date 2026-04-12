@@ -1,0 +1,54 @@
+:root {
+  --bg: #f4f2ee;
+  --surface: #ffffff;
+  --text: #1a1a1a;
+  --muted: #5c5c5c;
+  --border: #d8d4cc;
+  --accent: #0d6e6e;
+  --accent-hover: #0a5555;
+  --danger: #b42318;
+  --code-bg: #1e1e1e;
+  --code-fg: #d4d4d4;
+}
+
+[data-theme="dark"] {
+  --bg: #121418;
+  --surface: #1a1d24;
+  --text: #e8e6e3;
+  --muted: #9a9590;
+  --border: #2e323c;
+  --accent: #3db8b8;
+  --accent-hover: #2d9a9a;
+  --danger: #f97066;
+  --code-bg: #0d0d0d;
+  --code-fg: #c8c8c8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--accent);
+}
