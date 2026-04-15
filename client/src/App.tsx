@@ -1,27 +1,41 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   clearHistory,
-  extractLocatorsFromUrl,
+  convertLocatorsApi,
+  fetchPlaywrightLocatorsPreview,
   fetchHistory,
   fetchJiraIssue,
   generateCode,
   generateCodeStream,
   healthCheck,
   parseCsv,
+  type ConvertLocatorResultItem,
+  type CsvTestCaseRow,
   cancelRecordingOnServer,
   recordTestFlow,
   type HistoryEntry,
+  type LintIssue,
+  type LlmProvider,
   type Platform,
+  type PlaywrightPageLocale,
+  type StylePass,
 } from "./api";
 import "./App.css";
 
 type InputTab = "manual" | "csv" | "jira" | "record";
 
-const MODELS = [
+const OLLAMA_MODELS = [
   { value: "llama3.2", label: "llama3.2 (default)" },
   { value: "llama3", label: "llama3" },
   { value: "codellama", label: "codellama (code)" },
   { value: "qwen3-coder:30b", label: "qwen3-coder:30b (code)" },
+];
+
+const GEMINI_MODELS = [
+  { value: "gemini-2.0-flash", label: "gemini-2.0-flash (default)" },
+  { value: "gemini-2.0-flash-lite", label: "gemini-2.0-flash-lite" },
+  { value: "gemini-1.5-flash", label: "gemini-1.5-flash" },
+  { value: "gemini-1.5-pro", label: "gemini-1.5-pro" },
 ];
 
 function splitSteps(text: string): string[] {
@@ -31,33 +45,86 @@ function splitSteps(text: string): string[] {
     .filter(Boolean);
 }
 
+/** Append recorded `name = selector` lines to the shared locators box (used after Record). */
+function mergeLocatorBlock(existing: string, added: string): string {
+  const e = existing.trim();
+  const a = added.trim();
+  if (!a) return e;
+  if (!e) return a;
+  return `${e}\n${a}`;
+}
+
+/** Lines for conversion: manual Locators field first, then Playwright preview (later duplicates win on server). */
+function mergeLocatorLinesForConvert(manual: string, preview: string | null): string[] {
+  const lines: string[] = [];
+  for (const l of manual.split(/\r?\n/)) {
+    const t = l.trim();
+    if (t && !t.startsWith("#")) lines.push(t);
+  }
+  if (preview) {
+    for (const l of preview.split(/\r?\n/)) {
+      const t = l.trim();
+      if (t && !t.startsWith("#")) lines.push(t);
+    }
+  }
+  return lines;
+}
+
+function FieldClearBelow({
+  onClear,
+  disabled,
+}: {
+  onClear: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="field-clear-row">
+      <button type="button" className="btn btn-ghost btn-small" onClick={onClear} disabled={disabled}>
+        Clear
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<InputTab>("manual");
   const [manualSteps, setManualSteps] = useState("");
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const [csvSteps, setCsvSteps] = useState<string[]>([]);
+  const [csvFormat, setCsvFormat] = useState<"simple" | "test-cases" | null>(null);
+  const [csvTestCaseRows, setCsvTestCaseRows] = useState<CsvTestCaseRow[]>([]);
+  const [csvSelectedRowIndexes, setCsvSelectedRowIndexes] = useState<number[]>([]);
   const [jiraKey, setJiraKey] = useState("PROJ-123");
   const [jiraBaseUrl, setJiraBaseUrl] = useState("");
   const [jiraEmail, setJiraEmail] = useState("");
   const [jiraApiToken, setJiraApiToken] = useState("");
-  const [jiraSteps, setJiraSteps] = useState<string[]>([]);
+  /** Lines from Jira (or demo); editable — this is what Generate sends to the engine. */
+  const [jiraStepsText, setJiraStepsText] = useState("");
   const [jiraMeta, setJiraMeta] = useState<{ mock: boolean; summary: string } | null>(null);
   const [jiraLoading, setJiraLoading] = useState(false);
 
-  const [recordUrl, setRecordUrl] = useState("https://example.com");
-  const [recordStepsText, setRecordStepsText] = useState("");
-  const [recordLocatorsText, setRecordLocatorsText] = useState("");
+  const [recordUrl, setRecordUrl] = useState("");
   const [recordPlaywrightScript, setRecordPlaywrightScript] = useState("");
   const [recordLoading, setRecordLoading] = useState(false);
+  /** When true, server keeps full trace (no dedupe / no intent inserts / strict count). Default on. */
+  const [preserveRecordingFidelity, setPreserveRecordingFidelity] = useState(true);
 
   const [platform, setPlatform] = useState<Platform>("web");
+  const [llm, setLlm] = useState<LlmProvider>("ollama");
   const [model, setModel] = useState("llama3.2");
   const [locators, setLocators] = useState("");
-  const [locatorUrl, setLocatorUrl] = useState("https://example.com");
+  const [locatorUrl, setLocatorUrl] = useState("");
+  const [pageLocale, setPageLocale] = useState<PlaywrightPageLocale>("auto");
   const [autoDetectLocators, setAutoDetectLocators] = useState(false);
   const [autoPreview, setAutoPreview] = useState<string | null>(null);
   const [fetchingLocators, setFetchingLocators] = useState(false);
+  const [brandingOnlyPreview, setBrandingOnlyPreview] = useState(false);
+  const [convertReport, setConvertReport] = useState<ConvertLocatorResultItem[] | null>(null);
+  const [convertLoading, setConvertLoading] = useState(false);
+  const [autoConvertBeforeGenerate, setAutoConvertBeforeGenerate] = useState(false);
   const [testCaseName, setTestCaseName] = useState("TC_Login_Smoke");
+  const [stylePass, setStylePass] = useState<StylePass>("none");
   const [useStream, setUseStream] = useState(false);
 
   const [output, setOutput] = useState("");
@@ -66,6 +133,7 @@ export default function App() {
   const [health, setHealth] = useState<string | null>(null);
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [lint, setLint] = useState<LintIssue[] | null>(null);
   const [dark, setDark] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -93,17 +161,47 @@ export default function App() {
 
   useEffect(() => {
     healthCheck()
-      .then((h) => setHealth(`${h.ollamaBase} · default ${h.defaultModel}`))
+      .then((h) => {
+        const gem =
+          h.geminiConfigured === true
+            ? "Gemini key: configured"
+            : "Gemini key: not set (GEMINI_API_KEY on server)";
+        setHealth(`${h.ollamaBase} · Ollama default ${h.defaultModel} · ${gem}`);
+      })
       .catch(() => setHealth("API unreachable — start the backend"));
     loadHistory();
   }, [loadHistory]);
 
+  useEffect(() => {
+    if (llm === "ollama") {
+      setModel((m) => (OLLAMA_MODELS.some((x) => x.value === m) ? m : "llama3.2"));
+    } else {
+      setModel((m) => (GEMINI_MODELS.some((x) => x.value === m) ? m : "gemini-2.0-flash"));
+    }
+  }, [llm]);
+
   const effectiveSteps = useMemo(() => {
     if (tab === "manual") return splitSteps(manualSteps);
-    if (tab === "csv") return csvSteps;
-    if (tab === "jira") return jiraSteps;
-    return splitSteps(recordStepsText);
-  }, [tab, manualSteps, csvSteps, jiraSteps, recordStepsText]);
+    if (tab === "csv") {
+      if (csvFormat === "test-cases" && csvTestCaseRows.length) {
+        return [...csvSelectedRowIndexes]
+          .sort((a, b) => a - b)
+          .flatMap((i) => csvTestCaseRows[i]?.stepLines ?? []);
+      }
+      return csvSteps;
+    }
+    if (tab === "jira") return splitSteps(jiraStepsText);
+    if (tab === "record") return [];
+    return [];
+  }, [
+    tab,
+    manualSteps,
+    csvSteps,
+    csvFormat,
+    csvTestCaseRows,
+    csvSelectedRowIndexes,
+    jiraStepsText,
+  ]);
 
   const onCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -111,12 +209,39 @@ export default function App() {
     setCsvFileName(file.name);
     setError(null);
     try {
-      const { steps } = await parseCsv(file);
-      setCsvSteps(steps);
+      const data = await parseCsv(file);
+      if (data.format === "test-cases") {
+        setCsvFormat("test-cases");
+        setCsvTestCaseRows(data.rows);
+        setCsvSelectedRowIndexes(data.rows.map((_, i) => i));
+        setCsvSteps(data.steps);
+      } else {
+        setCsvFormat("simple");
+        setCsvTestCaseRows([]);
+        setCsvSelectedRowIndexes([]);
+        setCsvSteps(data.steps);
+      }
     } catch (err) {
       setCsvSteps([]);
+      setCsvFormat(null);
+      setCsvTestCaseRows([]);
+      setCsvSelectedRowIndexes([]);
       setError(err instanceof Error ? err.message : "CSV parse failed");
     }
+  };
+
+  const toggleCsvRowSelected = (index: number) => {
+    setCsvSelectedRowIndexes((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index].sort((a, b) => a - b)
+    );
+  };
+
+  const selectAllCsvRows = () => {
+    setCsvSelectedRowIndexes(csvTestCaseRows.map((_, i) => i));
+  };
+
+  const clearAllCsvRows = () => {
+    setCsvSelectedRowIndexes([]);
   };
 
   const onRecordFlow = async () => {
@@ -133,9 +258,8 @@ export default function App() {
     try {
       const r = await recordTestFlow(recordUrl.trim(), (u) => setRecordUrl(u));
       setRecordPlaywrightScript(r.playwrightScript);
-      setRecordStepsText(r.steps.join("\n"));
-      setRecordLocatorsText(r.locators.map((l) => `${l.name} = ${l.selector}`).join("\n"));
-      setManualSteps(r.steps.join("\n"));
+      const recLocatorLines = r.locators.map((l) => `${l.name} = ${l.selector}`).join("\n");
+      setLocators((prev) => mergeLocatorBlock(prev, recLocatorLines));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Recording failed");
     } finally {
@@ -163,11 +287,12 @@ export default function App() {
       const creds =
         b && e && t ? { baseUrl: b, email: e, apiToken: t } : undefined;
       const r = await fetchJiraIssue(key, creds);
-      setJiraSteps(r.steps);
+      const lines = r.steps.join("\n");
+      setJiraStepsText(lines);
       setJiraMeta({ mock: r.mock, summary: r.summary });
-      setManualSteps(r.steps.join("\n"));
+      setManualSteps(lines);
     } catch (err) {
-      setJiraSteps([]);
+      setJiraStepsText("");
       setJiraMeta(null);
       setError(err instanceof Error ? err.message : "Jira fetch failed");
     } finally {
@@ -183,25 +308,43 @@ export default function App() {
         return;
       }
       if (!recordPlaywrightScript.trim() && !recordUrl.trim()) {
-        setError("Record a flow first (or enter a URL to re-record on generate), or add steps in the fields below.");
+        setError(
+          "Paste a Playwright script above, record a flow, or enter a URL so the server can capture on Generate."
+        );
         return;
       }
     }
-    if (effectiveSteps.length === 0) {
+    const recordHasScriptOrUrl =
+      tab === "record" && platform === "web" && (recordPlaywrightScript.trim().length > 0 || recordUrl.trim().length > 0);
+    if (effectiveSteps.length === 0 && !recordHasScriptOrUrl) {
       setError("Add at least one test step.");
       return;
     }
-    if (autoDetectLocators && !locatorUrl.trim()) {
+    if (tab !== "record" && autoDetectLocators && !locatorUrl.trim()) {
       setError("Enter a page URL or turn off auto-detect locators.");
       return;
     }
     setLoading(true);
     setOutput("");
+    setLint(null);
     try {
-      const mergedLocators =
-        tab === "record" && recordLocatorsText.trim()
-          ? [locators.trim(), recordLocatorsText.trim()].filter(Boolean).join("\n")
-          : locators;
+      let locatorsForGenerate = locators;
+      if (autoConvertBeforeGenerate) {
+        const mergeLines = mergeLocatorLinesForConvert(locators, autoPreview);
+        if (mergeLines.length > 0) {
+          try {
+            const convUrl = locatorUrl.trim() || recordUrl.trim() || undefined;
+            const data = await convertLocatorsApi({ locators: mergeLines, url: convUrl });
+            locatorsForGenerate = data.lines;
+            setLocators(data.lines);
+            setConvertReport(data.results);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Auto-convert before generate failed");
+            setLoading(false);
+            return;
+          }
+        }
+      }
 
       let urlForGenerate: string | undefined;
       if (tab === "record" && platform === "web") {
@@ -215,26 +358,32 @@ export default function App() {
       const payload = {
         platform,
         steps: effectiveSteps,
-        locators: mergedLocators,
+        locators: locatorsForGenerate,
+        llm,
         model,
         testCaseName: testCaseName.trim() || undefined,
         autoDetectLocators:
           tab !== "record" && autoDetectLocators && Boolean(locatorUrl.trim()),
         url: urlForGenerate,
+        pageLocale,
+        stylePass,
         ...(tab === "record" && platform === "web"
           ? {
               mode: "record" as const,
               recordedPlaywrightScript: recordPlaywrightScript.trim() || undefined,
+              preserveRecordingFidelity,
             }
           : {}),
       };
       if (useStream) {
+        setLint(null);
         await generateCodeStream(payload, (chunk) => {
           setOutput((prev) => prev + chunk);
         });
       } else {
         const r = await generateCode(payload);
         setOutput(r.code);
+        setLint(r.lint ?? []);
       }
       await loadHistory();
     } catch (err) {
@@ -260,6 +409,50 @@ export default function App() {
     URL.revokeObjectURL(a.href);
   };
 
+  const onClearOutput = () => {
+    setOutput("");
+    setLint(null);
+  };
+
+  const clearCsvSelection = () => {
+    setCsvFileName(null);
+    setCsvSteps([]);
+    setCsvFormat(null);
+    setCsvTestCaseRows([]);
+    setCsvSelectedRowIndexes([]);
+    setError(null);
+    if (csvInputRef.current) csvInputRef.current.value = "";
+  };
+
+  const handleConvertLocators = async () => {
+    setError(null);
+    const lines = mergeLocatorLinesForConvert(locators, autoPreview);
+    if (lines.length === 0) {
+      setConvertReport(null);
+      setError("Add locator lines (Locators field and/or Playwright preview) before converting.");
+      return;
+    }
+    setConvertLoading(true);
+    try {
+      const url = locatorUrl.trim() || recordUrl.trim() || undefined;
+      const data = await convertLocatorsApi({ locators: lines, url });
+      setLocators(data.lines);
+      setConvertReport(data.results);
+      if (data.errors.length > 0) {
+        setError(
+          `Conversion completed with ${data.errors.length} fallback(s). See the report below for details.`
+        );
+      } else {
+        setError(null);
+      }
+    } catch (err) {
+      setConvertReport(null);
+      setError(err instanceof Error ? err.message : "Convert to Katalon locators failed");
+    } finally {
+      setConvertLoading(false);
+    }
+  };
+
   const onFetchLocatorsPreview = async () => {
     setError(null);
     if (!locatorUrl.trim()) {
@@ -269,16 +462,22 @@ export default function App() {
     setFetchingLocators(true);
     setAutoPreview(null);
     try {
-      const list = await extractLocatorsFromUrl(locatorUrl.trim());
-      setAutoPreview(
-        list.map((x) => `${x.name} = ${x.selector}`).join("\n") || "(no elements found)"
-      );
+      const lines = await fetchPlaywrightLocatorsPreview(locatorUrl.trim(), pageLocale);
+      setAutoPreview(lines.join("\n") || "(no elements found)");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Locator extraction failed");
     } finally {
       setFetchingLocators(false);
     }
   };
+
+  const filteredAutoPreview = useMemo(() => {
+    if (autoPreview === null) return null;
+    if (!brandingOnlyPreview) return autoPreview;
+    const lines = autoPreview.split(/\r?\n/);
+    const keep = lines.filter((l) => /\b(logo|image|icon|svg|img|background)\b/i.test(l));
+    return keep.join("\n") || "(no image/logo/icon locators found)";
+  }, [autoPreview, brandingOnlyPreview]);
 
   const onClearHistory = async () => {
     try {
@@ -293,10 +492,10 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <h1>Katalon script generator (Ollama)</h1>
+          <h1>Katalon script generator</h1>
           <p className="hint" style={{ margin: "0.25rem 0 0" }}>
-            Local LLM only — no cloud APIs. Backend proxies{" "}
-            <code>/api/generate</code> → Ollama.
+            Choose <strong>Ollama</strong> (local) or <strong>Gemini</strong> (Google). The backend calls the model;
+            Gemini uses <code>GEMINI_API_KEY</code> from server env only — never paste keys into the UI.
           </p>
         </div>
         <div className="header-meta">
@@ -360,6 +559,7 @@ export default function App() {
                   onChange={(e) => setManualSteps(e.target.value)}
                   spellCheck={false}
                 />
+                <FieldClearBelow onClear={() => setManualSteps("")} disabled={!manualSteps.trim()} />
               </div>
             </div>
           )}
@@ -368,14 +568,79 @@ export default function App() {
             <div className="stack">
               <div>
                 <label className="field-label" htmlFor="csv">
-                  CSV file (columns: Step, Description)
+                  CSV file
                 </label>
-                <input id="csv" type="file" accept=".csv,text/csv" onChange={onCsv} />
+                <input
+                  id="csv"
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={onCsv}
+                />
+                <FieldClearBelow
+                  onClear={clearCsvSelection}
+                  disabled={!csvFileName && !csvSteps.length}
+                />
               </div>
-              {csvFileName && (
+              <p className="hint">
+                <strong>Simple format:</strong> columns <code>Step</code> + <code>Description</code> (or similar).
+                <br />
+                <strong>Test-case export:</strong> a <code>Steps</code> column (e.g. VIC / Zephyr) — only the Steps
+                text is used; <code>| Expected: …</code> is removed. Pick which test-case rows to send to the
+                generator.
+              </p>
+              {csvFileName && csvFormat === "simple" && (
                 <p className="hint">
-                  Loaded <strong>{csvFileName}</strong> — {csvSteps.length} step(s).
+                  Loaded <strong>{csvFileName}</strong> — {csvSteps.length} step line(s).
                 </p>
+              )}
+              {csvFileName && csvFormat === "test-cases" && csvTestCaseRows.length > 0 && (
+                <div className="csv-test-case-panel">
+                  <p className="hint" style={{ marginBottom: "0.5rem" }}>
+                    <strong>{csvFileName}</strong> — {csvTestCaseRows.length} test case(s).{" "}
+                    <strong>{csvSelectedRowIndexes.length}</strong> selected →{" "}
+                    <strong>{effectiveSteps.length}</strong> step line(s) for generation.
+                  </p>
+                  <div className="csv-test-case-actions">
+                    <button type="button" className="btn btn-ghost btn-small" onClick={selectAllCsvRows}>
+                      Select all
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-small" onClick={clearAllCsvRows}>
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="csv-test-case-table-wrap">
+                    <table className="csv-test-case-table">
+                      <thead>
+                        <tr>
+                          <th className="csv-col-check" aria-label="Include" />
+                          <th>ID</th>
+                          <th>Description</th>
+                          <th className="csv-col-n">Steps</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvTestCaseRows.map((row, index) => (
+                          <tr key={`${row.sourceRowIndex}-${row.testCaseId}`}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={csvSelectedRowIndexes.includes(index)}
+                                onChange={() => toggleCsvRowSelected(index)}
+                                aria-label={`Include ${row.testCaseId}`}
+                              />
+                            </td>
+                            <td className="csv-tc-id">{row.testCaseId}</td>
+                            <td className="csv-tc-title" title={row.title}>
+                              {row.title.length > 90 ? `${row.title.slice(0, 90)}…` : row.title}
+                            </td>
+                            <td className="csv-tc-n">{row.stepLines.length}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -395,20 +660,26 @@ export default function App() {
                   value={jiraBaseUrl}
                   onChange={(e) => setJiraBaseUrl(e.target.value)}
                 />
+                <p className="hint" style={{ marginTop: "0.25rem" }}>
+                  Use the <strong>site root</strong> (e.g. <code>https://jira.company.com</code>). Long browser URLs like
+                  /secure/Dashboard.jspa are trimmed on the server.
+                </p>
+                <FieldClearBelow onClear={() => setJiraBaseUrl("")} disabled={!jiraBaseUrl.trim()} />
               </div>
               <div>
                 <label className="field-label" htmlFor="jiraEmail">
-                  Email (Atlassian account)
+                  Email (Cloud) or username (Server / Data Center)
                 </label>
                 <input
                   id="jiraEmail"
                   className="input"
-                  type="email"
+                  type="text"
                   autoComplete="username"
-                  placeholder="you@company.com"
+                  placeholder="you@company.com or jira-username"
                   value={jiraEmail}
                   onChange={(e) => setJiraEmail(e.target.value)}
                 />
+                <FieldClearBelow onClear={() => setJiraEmail("")} disabled={!jiraEmail.trim()} />
               </div>
               <div>
                 <label className="field-label" htmlFor="jiraToken">
@@ -423,19 +694,22 @@ export default function App() {
                   value={jiraApiToken}
                   onChange={(e) => setJiraApiToken(e.target.value)}
                 />
+                <FieldClearBelow onClear={() => setJiraApiToken("")} disabled={!jiraApiToken.trim()} />
               </div>
               <div className="row-2">
                 <div>
                   <label className="field-label" htmlFor="jira">
-                    Issue key
+                    Issue key or browse URL
                   </label>
                   <input
                     id="jira"
                     className="input"
                     value={jiraKey}
                     onChange={(e) => setJiraKey(e.target.value)}
+                    placeholder="DE-123 or https://jira…/browse/DE-123"
                     spellCheck={false}
                   />
+                  <FieldClearBelow onClear={() => setJiraKey("")} disabled={!jiraKey.trim()} />
                 </div>
                 <div style={{ alignSelf: "flex-end" }}>
                   <button
@@ -450,15 +724,38 @@ export default function App() {
               </div>
               <p className="hint">
                 Leave URL, email, and token empty to load <strong>demo</strong> steps only. Credentials are sent per
-                request and are not stored on the server.
+                request and are not stored on the server. For <strong>gosi.ins</strong> and most on‑prem Jira: use your{" "}
+                <strong>Jira username</strong> (login id), not always your email, with your password or a{" "}
+                <strong>Personal Access Token</strong> from your Jira profile — not the Atlassian Cloud API token page.
               </p>
               {jiraMeta && (
                 <p className="hint">
-                  {jiraMeta.mock ? "Demo data (no credentials sent). " : "Live Jira issue. "}
-                  <strong>{jiraMeta.summary}</strong> — {jiraSteps.length} step(s). Manual tab was updated with the same
-                  steps.
+                  {jiraMeta.mock ? "Demo data (no credentials sent). " : "Loaded issue: "}
+                  <strong>{jiraMeta.summary}</strong> — {splitSteps(jiraStepsText).length} step line(s) below.
                 </p>
               )}
+              <div className="jira-steps-panel">
+                <label className="field-label" htmlFor="jiraStepsBox">
+                  Test steps from Jira (one per line — used by Generate)
+                </label>
+                <p className="hint" style={{ marginBottom: "0.35rem" }}>
+                  After <strong>Fetch from Jira</strong>, the issue description steps appear here. Edit if needed; the
+                  generator uses exactly these lines while you stay on the Jira tab.
+                </p>
+                <textarea
+                  id="jiraStepsBox"
+                  className="input jira-steps-textarea"
+                  rows={10}
+                  value={jiraStepsText}
+                  onChange={(e) => setJiraStepsText(e.target.value)}
+                  placeholder='Click "Fetch from Jira" to load steps from the issue description…'
+                  spellCheck={false}
+                />
+                <FieldClearBelow
+                  onClear={() => setJiraStepsText("")}
+                  disabled={!jiraStepsText.trim()}
+                />
+              </div>
             </div>
           )}
 
@@ -480,7 +777,16 @@ export default function App() {
                   onChange={(e) => setRecordUrl(e.target.value)}
                   placeholder="https://..."
                 />
+                <FieldClearBelow onClear={() => setRecordUrl("")} disabled={!recordUrl.trim()} />
               </div>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={preserveRecordingFidelity}
+                  onChange={(e) => setPreserveRecordingFidelity(e.target.checked)}
+                />
+                Lossless replay (preserve full trace; no inserted steps; skip Groovy optimizers)
+              </label>
               <div className="row-actions">
                 <button
                   type="button"
@@ -511,40 +817,24 @@ export default function App() {
                 <label className="field-label" htmlFor="pwScript">
                   Playwright-style script (editable)
                 </label>
+                <p className="hint" style={{ marginBottom: "0.35rem" }}>
+                  Katalon is generated from this script on the server (an empty step list is sent). After{" "}
+                  <strong>Record test flow</strong>, locator lines are merged into the main <strong>Locators</strong>{" "}
+                  field below — edit there if needed.
+                </p>
                 <textarea
                   id="pwScript"
-                  className="input"
+                  className="input record-flow-textarea"
                   rows={6}
                   value={recordPlaywrightScript}
                   onChange={(e) => setRecordPlaywrightScript(e.target.value)}
                   spellCheck={false}
-                  placeholder="Populated after recording…"
+                  placeholder="Paste a script or populate by recording…"
+                  dir="ltr"
                 />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="recSteps">
-                  Steps (editable)
-                </label>
-                <textarea
-                  id="recSteps"
-                  className="input"
-                  rows={6}
-                  value={recordStepsText}
-                  onChange={(e) => setRecordStepsText(e.target.value)}
-                  spellCheck={false}
-                />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="recLoc">
-                  Locators (editable, name = selector per line)
-                </label>
-                <textarea
-                  id="recLoc"
-                  className="input"
-                  rows={5}
-                  value={recordLocatorsText}
-                  onChange={(e) => setRecordLocatorsText(e.target.value)}
-                  spellCheck={false}
+                <FieldClearBelow
+                  onClear={() => setRecordPlaywrightScript("")}
+                  disabled={!recordPlaywrightScript.trim()}
                 />
               </div>
             </div>
@@ -567,22 +857,37 @@ export default function App() {
                 </select>
               </div>
               <div>
-                <label className="field-label" htmlFor="model">
-                  Ollama model
+                <label className="field-label" htmlFor="llm">
+                  LLM provider
                 </label>
                 <select
-                  id="model"
+                  id="llm"
                   className="input"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  value={llm}
+                  onChange={(e) => setLlm(e.target.value as LlmProvider)}
                 >
-                  {MODELS.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
+                  <option value="ollama">Ollama (local)</option>
+                  <option value="gemini">Google Gemini (API)</option>
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="field-label" htmlFor="model">
+                {llm === "ollama" ? "Ollama model" : "Gemini model"}
+              </label>
+              <select
+                id="model"
+                className="input"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              >
+                {(llm === "ollama" ? OLLAMA_MODELS : GEMINI_MODELS).map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -595,12 +900,34 @@ export default function App() {
                 value={testCaseName}
                 onChange={(e) => setTestCaseName(e.target.value)}
               />
+              <FieldClearBelow onClear={() => setTestCaseName("")} disabled={!testCaseName.trim()} />
+            </div>
+
+            <div>
+              <label className="field-label" htmlFor="stylePass">
+                Format / style pass
+              </label>
+              <select
+                id="stylePass"
+                className="input"
+                value={stylePass}
+                onChange={(e) => setStylePass(e.target.value as StylePass)}
+              >
+                <option value="none">None</option>
+                <option value="simplify">Simplify layout (post-process)</option>
+                <option value="match-project">Match project style (prompt)</option>
+              </select>
             </div>
 
             <div>
               <label className="field-label" htmlFor="locators">
                 Locators (label = Object Repository path or CSS, one per line)
               </label>
+              {tab === "record" && (
+                <p className="hint" style={{ marginBottom: "0.35rem" }}>
+                  Each successful <strong>Record test flow</strong> merges <code>name = selector</code> lines here.
+                </p>
+              )}
               <textarea
                 id="locators"
                 className="input"
@@ -608,11 +935,73 @@ export default function App() {
                 onChange={(e) => setLocators(e.target.value)}
                 spellCheck={false}
               />
+              <FieldClearBelow onClear={() => setLocators("")} disabled={!locators.trim()} />
             </div>
+
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={autoConvertBeforeGenerate}
+                onChange={(e) => setAutoConvertBeforeGenerate(e.target.checked)}
+              />
+              Auto convert before generate (Katalon CSS/XPath only)
+            </label>
+
+            <div className="loc-convert-toolbar">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConvertLocators}
+                disabled={convertLoading || loading}
+              >
+                {convertLoading ? "Converting…" : "Convert to Katalon Locators"}
+              </button>
+              <span className="hint" style={{ margin: 0 }}>
+                Merges <strong>Locators</strong> + <strong>Playwright preview</strong>; Playwright/Selenium/Cypress → CSS/XPath.
+              </span>
+            </div>
+
+            {convertReport && convertReport.length > 0 && (
+              <div className="loc-convert-report">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Label</th>
+                      <th>Original</th>
+                      <th>Converted</th>
+                      <th>Confidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {convertReport.map((row, i) => (
+                      <tr key={`${row.label}-${i}`}>
+                        <td>{row.label}</td>
+                        <td className="loc-convert-code">{row.original}</td>
+                        <td className="loc-convert-code">
+                          {row.label} = {row.value}
+                        </td>
+                        <td
+                          className={
+                            row.confidence === "high"
+                              ? "conf-high"
+                              : row.confidence === "medium"
+                                ? "conf-medium"
+                                : "conf-low"
+                          }
+                        >
+                          {row.confidence}
+                          {row.error ? ` — ${row.error}` : ""}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <div>
               <label className="field-label" htmlFor="locatorUrl">
-                Page URL (for Playwright auto-detect)
+                Page URL (preview &amp; auto-detect for generate)
               </label>
               <input
                 id="locatorUrl"
@@ -622,6 +1011,23 @@ export default function App() {
                 onChange={(e) => setLocatorUrl(e.target.value)}
                 placeholder="https://..."
               />
+              <FieldClearBelow onClear={() => setLocatorUrl("")} disabled={!locatorUrl.trim()} />
+            </div>
+
+            <div>
+              <label className="field-label" htmlFor="pageLocale">
+                Page language (Playwright extraction)
+              </label>
+              <select
+                id="pageLocale"
+                className="input"
+                value={pageLocale}
+                onChange={(e) => setPageLocale(e.target.value as PlaywrightPageLocale)}
+              >
+                <option value="auto">Auto</option>
+                <option value="en">English</option>
+                <option value="ar">Arabic</option>
+              </select>
             </div>
 
             <label className="checkbox-row">
@@ -630,7 +1036,7 @@ export default function App() {
                 checked={autoDetectLocators}
                 onChange={(e) => setAutoDetectLocators(e.target.checked)}
               />
-              Auto-detect locators (Playwright) when generating — merges with manual list; manual labels win
+              Auto-detect for generate (CSS/XPath map; merge with manual; manual wins)
             </label>
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -645,8 +1051,32 @@ export default function App() {
             </div>
             {autoPreview !== null && (
               <div>
-                <label className="field-label">Last preview (not saved until you generate)</label>
-                <textarea className="input" readOnly value={autoPreview} rows={6} spellCheck={false} />
+                <label className="field-label">
+                  Playwright locators preview (getByRole / getByLabel / … — not saved until you generate)
+                </label>
+                <label className="checkbox-row" style={{ marginTop: "0.4rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={brandingOnlyPreview}
+                    onChange={(e) => setBrandingOnlyPreview(e.target.checked)}
+                  />
+                  Show only images / logos / icons
+                </label>
+                <textarea
+                  className="input locator-preview-textarea"
+                  readOnly
+                  value={filteredAutoPreview ?? ""}
+                  rows={28}
+                  spellCheck={false}
+                  wrap="off"
+                />
+                <FieldClearBelow
+                  onClear={() => {
+                    setAutoPreview(null);
+                    setBrandingOnlyPreview(false);
+                  }}
+                  disabled={!String(autoPreview ?? "").trim()}
+                />
               </div>
             )}
 
@@ -656,7 +1086,7 @@ export default function App() {
                 checked={useStream}
                 onChange={(e) => setUseStream(e.target.checked)}
               />
-              Stream response (live typing; uses Ollama streaming API)
+              Stream response (live typing; {llm === "ollama" ? "Ollama" : "Gemini"} streaming API)
             </label>
 
             {error && (
@@ -693,9 +1123,32 @@ export default function App() {
             </button>
 
             <p className="hint">
-              Steps in use: {effectiveSteps.length}. Ensure Ollama is running (
-              <code>ollama serve</code>) and the model is pulled (
-              <code>ollama pull {model}</code>).
+              {tab === "record" ? (
+                <>
+                  Record tab: generation uses the <strong>Playwright script</strong> and the main{" "}
+                  <strong>Locators</strong> field (filled automatically when you record).
+                </>
+              ) : tab === "jira" ? (
+                <>
+                  Steps in use: <strong>{effectiveSteps.length}</strong> — taken from the <strong>Test steps from Jira</strong>{" "}
+                  box on the Jira tab.
+                </>
+              ) : (
+                <>Steps in use: {effectiveSteps.length}.</>
+              )}
+              {llm === "ollama" ? (
+                <>
+                  {" "}
+                  Ensure Ollama is running (<code>ollama serve</code>) and the model is pulled (
+                  <code>ollama pull {model}</code>).
+                </>
+              ) : (
+                <>
+                  {" "}
+                  Set <code>GEMINI_API_KEY</code> in <code>server/.env</code> (or repo root <code>.env</code>), restart
+                  the backend, and ensure the chosen model is enabled for your Google AI project.
+                </>
+              )}
             </p>
           </div>
 
@@ -722,6 +1175,9 @@ export default function App() {
 
         <section className="panel code-panel">
           <div className="code-toolbar">
+            <button type="button" className="btn btn-ghost btn-small" onClick={onClearOutput} disabled={!output.trim()}>
+              Clear
+            </button>
             <button type="button" className="btn btn-ghost btn-small" onClick={onCopy} disabled={!output}>
               Copy
             </button>
@@ -737,6 +1193,20 @@ export default function App() {
           <pre className="code-pre" aria-live="polite">
             {output || (loading ? "…" : "// Generated Groovy appears here")}
           </pre>
+          {lint && lint.length > 0 && (
+            <div className="lint-panel">
+              <h3>Script checks</h3>
+              {lint.map((issue, i) => (
+                <div
+                  key={`${issue.rule}-${issue.line ?? i}-${i}`}
+                  className={`lint-item severity-${issue.severity}`}
+                >
+                  <strong>{issue.severity}</strong>
+                  {issue.line != null ? ` · line ${issue.line}` : ""} · {issue.rule}: {issue.message}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </div>

@@ -1,4 +1,5 @@
-const DEFAULT_BASE = "http://localhost:11434";
+/** Prefer 127.0.0.1 over localhost — on some Windows setups Node resolves localhost to ::1 first while Ollama listens on IPv4, causing fetch failed. */
+const DEFAULT_BASE = "http://127.0.0.1:11434";
 
 export interface OllamaGenerateOptions {
   baseUrl?: string;

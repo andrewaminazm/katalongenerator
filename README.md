@@ -1,6 +1,6 @@
-# Katalon Script Generator (Ollama)
+# Katalon Script Generator
 
-Production-oriented web tool that turns manual test steps, CSV files, Jira issues, or **Playwright-recorded flows** into **Katalon Studio Groovy** scripts using a **local Ollama** model. No OpenAI or cloud LLM APIs—after setup, generation runs fully offline except optional Jira calls.
+Production-oriented web tool that turns manual test steps, CSV files, Jira issues, or **Playwright-recorded flows** into **Katalon Studio Groovy** scripts. It uses a **local Ollama** model by default, with an optional **Google Gemini** backend when `GEMINI_API_KEY` is set on the server.
 
 ## Architecture
 
@@ -9,19 +9,85 @@ Production-oriented web tool that turns manual test steps, CSV files, Jira issue
 | Frontend | React 18 + Vite + TypeScript |
 | Backend | Node.js 20+ + Express + TypeScript |
 | Locators / record | Playwright (Chromium): `/api/locators`, headful record (`/api/record/start` + poll status/result), and generate `mode: "record"` |
-| AI | Ollama `POST /api/generate` (default `http://localhost:11434`) |
+| AI | **Ollama** `POST /api/generate` (default `http://localhost:11434`) or **Gemini** REST (`GEMINI_API_KEY` in `.env`) |
+| Groovy (web) | **Deterministic compiler** (default) + **post-processing** + **lint** — see below |
+| Compiler | `server/src/services/katalonCompiler/` — action mapping, locator scoring, TestObject build, assembly, validation |
 
 ### Data flow
 
+**Default (`deterministicCompiler` omitted or `true`):**
+
 ```
-User input (manual / CSV / Jira / Record)
-  → Optional Playwright crawl (`autoDetectLocators` + `url`) → merge with manual locators
-  → Optional headful record (`/api/record/start` + status/result, or generate `mode: "record"` + `url`) → steps + locators + script in prompt
-  → Normalize steps (backend)
-  → Prompt builder (Katalon WebUI vs Mobile, locator rules, recorded Playwright block when present)
-  → Ollama generate
-  → Groovy text → UI + optional server-side history
+User input → merge locators (manual + auto-detect + record)
+  → Step parser → action compiler (WebUI / Mobile keywords only)
+  → Locator lines → score & pick one strategy per label → TestObject builder
+  → Script assembler (fixed order: imports → setup → TestObjects → actions → cleanup)
+  → autoFix (web: normalizeKatalonWebGroovy) → validation gatekeeper → Groovy + lint + compilerWarnings
 ```
+
+**Legacy LLM path (`deterministicCompiler: false`):**
+
+```
+… → Prompt builder → Ollama or Gemini → web: normalizeKatalonWebGroovy → simplify → lint
+```
+
+### Deterministic compiler modules
+
+| Module | Role |
+|--------|------|
+| `locatorScorer.ts` | Priority scores (id, name, accessibilityId, css, xpath, OR path) + dynamic-id penalties |
+| `locatorParser.ts` | Parse `label = rhs` lines; classify single locator type per object |
+| `stepParser.ts` | Map free-text steps to intents (open, click, type, Enter, mobile tap, etc.) |
+| `actionCompiler.ts` | Intents + resolved locators → ordered internal operations; state tracker for implicit Enter |
+| `testObjectBuilder.ts` | One `TestObject` per label; `addProperty` once (no CSS+XPath mix) |
+| `scriptAssembler.ts` | Emit Groovy in strict section order |
+| `stateTracker.ts` | Last active element for `Keys.chord(Keys.ENTER)` |
+| `autoFixEngine.ts` | `webUI`→`WebUI`, then web normalization |
+| `validationLayer.ts` | Reject TestNG/JUnit markers, raw `findElement`, bad imports |
+| `index.ts` | `compileKatalonScript()` orchestrator (`model`: `katalon-compiler-v1`) |
+
+### Self-healing locators (optional runtime integration)
+
+After tests fail in Katalon or during Playwright checks, **POST** structured failures to recover locators without manual edits:
+
+| Module | Role |
+|--------|------|
+| `failureDetector.ts` | Normalize `{ stepId, action, failedLocator, errorType, domSnapshot? }` |
+| `fallbackLocatorGenerator.ts` | Re-open URL with Playwright, resolve failed element, emit scored alternatives (id, name, data-testid, aria, css, xpath) |
+| `healingScorer.ts` | Priority scores + penalties (aligned with compiler scorer) |
+| `retryExecutor.ts` | Ordered retry helper (`maxRetries`, default 3) |
+| `aiLocatorRepair.ts` | **Last resort:** Ollama JSON-only prompt for 3 locator objects |
+| `healingMemoryStore.ts` | Persists successful fixes under `server/data/healing-memory.json` (URL host + step + DOM signature) |
+| `locatorHealingEngine.ts` | Pipeline: **memory → rule-based → validate in browser → AI** |
+
+- **`POST /api/heal/locator`** — body: `url`, `stepId`, `action`, `failedLocator: { type, value }`, optional `errorType`, `domSnapshot`, `maxRetries`, `skipAi`.
+- **`GET /api/heal/memory`** — list learned locator entries.
+
+`/api/generate` JSON responses include a **`healing`** object (unless `includeHealingMetadata: false`) pointing at these endpoints.
+
+### Web script post-processing (`normalizeKatalonWebGroovy`)
+
+For **`platform: "web"`**, the backend does not rely on the model alone for imports and `openBrowser` calls. It applies (in order):
+
+1. **Strip bad Selenium imports** — Removes lines that fail in Studio (e.g. `WebDriver.LocationType`, `FRAMENAME`, invalid `WebDriver` imports).
+2. **Ensure Katalon imports** — Rebuilds a **canonical import block** after leading `//` comments:
+   - `FailureHandling` → `WebUI` → `TestObject` → `ConditionType` → optional `import static … findTestObject` **only if** `findTestObject(` appears → `Keys`.
+3. **`WebUI.openBrowser` normalization** — Rewrites single-argument calls to `WebUI.openBrowser(url, FailureHandling.STOP_ON_FAILURE)` to avoid Groovy `MethodSelectionException` overload ambiguity.
+
+Streaming responses are **buffered**, then run through the same pipeline so streamed output matches non-stream behavior.
+
+### Groovy lint (non-streaming `/api/generate`)
+
+The JSON response includes `lint`: an array of issues such as:
+
+| Rule | Severity | Notes |
+|------|----------|--------|
+| `no-raw-selenium` | error | Raw Selenium / `WebDriver` usage in generated lines |
+| `invalid-selenium-import` | error | Bad WebDriver-related imports (web) |
+| `webui-wait-typo` | error | e.g. `waitforElementVisible` vs `waitForElementVisible` |
+| `mobile-openBrowser-review` | warning | `Mobile.openBrowser` may be wrong for native/hybrid flows |
+| `unknown-findTestObject` | warning | OR path not in known project/locator list |
+| `formatting` / `top-level-imports` | info | Style hints |
 
 ## Project structure
 
@@ -36,10 +102,14 @@ kataloncode/
 │   ├── data/                 # history.json (created at runtime)
 │   └── src/
 │       ├── index.ts          # Express app
-│       ├── routes/api.ts     # REST: generate, record, locators, CSV, Jira, history
+│       ├── routes/api.ts     # REST: generate, record, locators, CSV, Jira, history, katalon upload
 │       ├── services/
 │       │   ├── ollama.ts     # HTTP client for Ollama (stream + non-stream)
+│       │   ├── gemini.ts     # Google Gemini generateContent + stream
 │       │   ├── promptBuilder.ts
+│       │   ├── katalonCompiler/   # deterministic compiler (see README)
+│       │   ├── healing/           # self-healing locators + Ollama repair
+│       │   ├── groovyLint.ts # lint + web Groovy normalization
 │       │   ├── csvParser.ts
 │       │   ├── jira.ts       # REST v3 + runtime credentials; demo if omitted
 │       │   ├── playwright.ts # headless extract locators
@@ -51,7 +121,7 @@ kataloncode/
     ├── package.json
     ├── vite.config.ts        # dev proxy /api → :8787
     └── src/
-        ├── App.tsx           # UI: inputs, platform, output, history
+        ├── App.tsx           # UI: inputs, platform, LLM choice, output, history
         └── api.ts            # fetch helpers
 ```
 
@@ -65,12 +135,14 @@ kataloncode/
   npm run playwright:install
   ```
 
-- **Ollama** installed and running (`ollama serve`), with at least one model pulled, e.g.:
+- **Ollama** (default LLM): installed and running (`ollama serve`), with at least one model pulled, e.g.:
 
   ```bash
   ollama pull llama3.2
   ollama pull codellama
   ```
+
+- **Gemini (optional):** set `GEMINI_API_KEY` in `.env` to enable the Gemini option in the UI; the key stays on the server only.
 
 ## Setup
 
@@ -89,7 +161,12 @@ kataloncode/
 
    On Linux/macOS: `cp .env.example .env`
 
-3. **Jira (optional):** in the app’s **Jira** tab, enter your site base URL (e.g. `https://your-domain.atlassian.net`), **email**, and **API token** (from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens)), then fetch an issue. Credentials are sent only with that request and are **not** stored in server files or generation history. If all three fields are left empty, the API returns **demo** steps so you can try the flow offline.
+3. Edit `.env` as needed:
+   - `OLLAMA_BASE_URL`, `OLLAMA_MODEL` — local Ollama
+   - `GEMINI_API_KEY`, `GEMINI_MODEL` — optional cloud LLM
+   - `PORT` — backend port (default **8787**)
+
+4. **Jira (optional):** in the app’s **Jira** tab, enter your site base URL (e.g. `https://your-domain.atlassian.net`), **email**, and **API token** (from [Atlassian API tokens](https://id.atlassian.com/manage-profile/security/api-tokens)), then fetch an issue. Credentials are sent only with that request and are **not** stored in server files or generation history. If all three fields are left empty, the API returns **demo** steps so you can try the flow offline.
 
 ## Run (development)
 
@@ -115,14 +192,14 @@ npm run install:all
 npm run dev
 ```
 
-Open **http://localhost:5173**.
+Open **http://localhost:5173** (or the port Vite prints if 5173 is busy).
 
 ## API (backend)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/api/health` | Health + Ollama base URL + default model |
-| `POST` | `/api/generate` | Body includes `platform`, `steps[]`, optional `mode: "record"`, `recordedPlaywrightScript`, `url`, `locators`, `autoDetectLocators`, … → Groovy. **`mode: "record"`** (web only): if `url` is set and `recordedPlaywrightScript` is omitted, runs a **headful** record session on the server, then merges locators; failures fall back to `steps` in the body. With a prior record result, send `recordedPlaywrightScript` and omit `url` to skip re-recording. |
+| `GET` | `/api/health` | Health + Ollama base URL + default model + **Gemini configured** flag + default Gemini model |
+| `POST` | `/api/generate` | Body includes `platform`, `steps[]`, optional **`deterministicCompiler`** (default `true` — no LLM; set `false` for legacy Ollama/Gemini), optional `llm`, `model`, `stream`, `mode`, `recordedPlaywrightScript`, `url`, `locators`, `autoDetectLocators`, `pageLocale`, Katalon project XML / imports, `testTemplate`, `stylePass`, `commentLanguage`, … → Groovy + **`lint`**. Response may include **`compilerWarnings`**, **`deterministic: true`**. **422** if deterministic output fails validation. **`mode: "record"`** (web only): if `url` is set and `recordedPlaywrightScript` is omitted, runs a **headful** record session on the server, then merges locators; failures fall back to `steps` in the body. With a prior record result, send `recordedPlaywrightScript` and omit `url` to skip re-recording. |
 | `POST` | `/api/record/start` | `{ url }` → `{ ok: true }`. Starts **headed** Chromium on the **host running the backend** (non-blocking). Returns `409` if a session is already running. |
 | `POST` | `/api/record/cancel` | Closes the headed browser and clears session state (use after a refresh or if the UI shows “already in progress”). |
 | `GET` | `/api/record/status` | `{ active, url }` — poll while recording; `url` updates on navigation and SPA route changes. |
@@ -132,16 +209,34 @@ Open **http://localhost:5173**.
 | `POST` | `/api/jira/issue` | `{ issueKey, credentials?: { baseUrl, email, apiToken } }` → `{ key, summary, steps[], mock }`. All three credential fields required together for a live call; otherwise `mock: true` demo data. **400** incomplete credentials; **401** invalid auth; **404** issue not found. |
 | `GET` | `/api/history` | Last generations (from `server/data/history.json`) |
 | `DELETE` | `/api/history` | Clear history file |
+| `POST` | `/api/heal/locator` | Self-healing: JSON body with `url`, `stepId`, `action`, `failedLocator: { type, value }`, optional `domSnapshot`, `maxRetries`, `skipAi` → ranked attempts, optional `suggestedKatalonSnippet`, `memoryUpdated` |
+| `GET` | `/api/heal/memory` | Learned locator fixes (`server/data/healing-memory.json`) |
 
-### Ollama integration
+### LLM integration
 
-- Non-stream: `POST {OLLAMA_BASE_URL}/api/generate` with `{ "model", "prompt", "stream": false }`.
-- Stream (optional UI): same endpoint with `"stream": true`; backend forwards token chunks as `text/plain`.
+- **Ollama:** `POST {OLLAMA_BASE_URL}/api/generate` with `{ "model", "prompt", "stream": false | true }`.
+- **Gemini:** `generateContent` / `streamGenerateContent` (see `server/src/services/gemini.ts`).
 
 Environment:
 
 - `OLLAMA_BASE_URL` — default `http://localhost:11434`
 - `OLLAMA_MODEL` — default model name if the client omits it (`llama3.2`)
+- `GEMINI_API_KEY` — optional; required when `llm: "gemini"`
+- `GEMINI_MODEL` — default Gemini model id if the client omits it (`gemini-2.0-flash`)
+
+## Generation options (high level)
+
+The UI and `/api/generate` support:
+
+- **Platform:** `web` | `mobile` (different prompts and keywords).
+- **LLM:** Ollama (local) or Gemini (API key on server).
+- **Streaming:** optional live token stream; web scripts are still normalized after the full response is received.
+- **Record mode:** live browser recording + Playwright script for the prompt.
+- **Auto-detect locators:** Playwright pass over `url` to merge CSS/XPath hints.
+- **Katalon project context:** optional XML / uploaded OR paths to align `findTestObject` and style.
+- **Test templates:** e.g. smoke, regression, data-driven (prompt shaping).
+- **Style pass:** e.g. `simplify` formatting.
+- **Comments:** English or Arabic for step comments.
 
 ## CSV format
 
@@ -169,7 +264,7 @@ Login Button = Page_Login/btn_Login
 Username Field = Page_Login/txt_Username
 ```
 
-**Output:** Groovy using `WebUI.*` and `findTestObject('Page_Login/...')` per prompt rules (exact code depends on the local model).
+**Output:** Groovy using `WebUI.*` and, when the map uses OR paths, `findTestObject('Page_Login/...')`. For CSS/XPath lines, the prompt favors inline `TestObject` + `addProperty`. Exact code depends on the model; **web** output is post-processed for imports and `openBrowser` as described above.
 
 ## Production build
 
@@ -182,11 +277,12 @@ Serve `client/dist` as static files behind nginx (or similar) and reverse-proxy 
 
 ## Quality notes
 
-- **Prompt** enforces WebUI vs Mobile, `findTestObject`, no Selenium, Groovy 3, and skipping steps without locators (LLM may still drift—review generated scripts).
-- **Errors:** Jira/Ollama failures return JSON `{ error }` with HTTP 4xx/5xx.
+- **Prompt** enforces Web vs Mobile, locator rules, inline `TestObject` vs `findTestObject`, no raw Selenium in intent, and Groovy-oriented output. Models can still drift—**review** generated scripts before production use.
+- **Web post-processing** reduces common Studio failures (missing types, bad imports, `openBrowser` overload errors).
+- **Lint** surfaces likely issues in non-streaming responses.
+- **Errors:** Jira/Ollama/Gemini failures return JSON `{ error }` with HTTP 4xx/5xx.
 - **History:** Stored under `server/data/history.json` (gitignored when created).
 
 ## License
 
 Use and modify freely for internal tooling.
-# katalongenerator

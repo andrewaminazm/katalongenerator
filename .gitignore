@@ -4,4 +4,5 @@ dist/
 .DS_Store
 server/data/history.json
 .env
+server/.env
 client/dist/

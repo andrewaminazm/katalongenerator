@@ -5,7 +5,11 @@ import { fileURLToPath } from "url";
 const serverRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distServices = path.join(serverRoot, "dist", "services");
 
-const files = ["extractLocators.inbrowser.js", "recorderInject.inbrowser.js"];
+const files = [
+  "extractLocators.inbrowser.js",
+  "recorderInject.inbrowser.js",
+  "collectPlaywrightRaw.inbrowser.js",
+];
 
 fs.mkdirSync(distServices, { recursive: true });
 for (const f of files) {

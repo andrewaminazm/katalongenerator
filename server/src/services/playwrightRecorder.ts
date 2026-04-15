@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from "fs";
+import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import type { Browser, BrowserContext, Page } from "playwright";
 import { chromium } from "playwright";
+import { parsePlaywrightScriptToDsl } from "./playwrightActionParser.js";
 
 const __recDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,20 +12,37 @@ export interface RecorderLocator {
   selector: string;
 }
 
+/** Lossless mirror of captured browser events (no semantic renaming). */
+export interface RecorderRawStep {
+  action: "click" | "fill" | "navigate" | "change";
+  selector?: string;
+  url?: string;
+  value?: string;
+  timestamp?: number;
+  tag?: string;
+  text?: string;
+  pageUrl?: string;
+  reason?: string;
+}
+
 export interface RecorderResult {
   playwrightScript: string;
   steps: string[];
   locators: RecorderLocator[];
+  rawSteps: RecorderRawStep[];
 }
 
 export interface RecorderEventPayload {
-  type: "click" | "fill";
+  type: "click" | "fill" | "navigate" | "change";
+  /** May be empty for navigate steps (use url / pageUrl). */
   selector: string;
   tag?: string;
   text?: string;
   value?: string;
-  /** Set server-side when the event is received — used to emit correct `page.goto` after in-session navigation. */
   pageUrl?: string;
+  url?: string;
+  timestamp?: number;
+  reason?: string;
 }
 
 /** Current page URL during an active background recording (polled by GET /api/record/status). */
@@ -38,7 +56,13 @@ let lastRecordingError: Error | null = null;
 let recordingBrowser: Browser | null = null;
 
 const DEFAULT_MAX_MS = 180_000;
-const MAX_EVENTS = 200;
+/** Hard cap only to avoid OOM; must not silently drop normal sessions. */
+const MAX_EVENTS = 100_000;
+
+function recorderDebug(): boolean {
+  const v = process.env.RECORD_RECORDER_DEBUG?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
 
 function getInjectPath(): string {
   const p = path.join(__recDir, "recorderInject.inbrowser.js");
@@ -86,7 +110,7 @@ function syncProgressUrl(page: Page, publish: boolean) {
   }
 }
 
-/** Compare URLs for deduping consecutive navigations (strip hash only). */
+/** Compare URLs for deduping consecutive navigations in emitted Playwright (strip hash only). */
 function navKey(u: string): string {
   try {
     const x = new URL(u);
@@ -95,6 +119,32 @@ function navKey(u: string): string {
   } catch {
     return u;
   }
+}
+
+interface CapturedEvent {
+  type: "click" | "fill" | "navigate" | "change";
+  selector: string;
+  tag?: string;
+  text?: string;
+  value?: string;
+  pageUrl?: string;
+  url?: string;
+  timestamp?: number;
+  reason?: string;
+}
+
+function toRawSteps(events: CapturedEvent[]): RecorderRawStep[] {
+  return events.map((ev) => ({
+    action: ev.type,
+    selector: ev.selector || undefined,
+    url: ev.url || (ev.type === "navigate" ? ev.pageUrl : undefined),
+    value: ev.value,
+    timestamp: ev.timestamp,
+    tag: ev.tag,
+    text: ev.text,
+    pageUrl: ev.pageUrl,
+    reason: ev.reason,
+  }));
 }
 
 async function runRecordingSession(
@@ -113,8 +163,9 @@ async function runRecordingSession(
 
   const maxMs = Math.min(options.maxDurationMs ?? DEFAULT_MAX_MS, 180_000);
   const publish = options.publishProgress;
+  const dbg = recorderDebug();
 
-  const events: RecorderEventPayload[] = []; // pageUrl filled in __pwRecorderEvent handler
+  const events: CapturedEvent[] = [];
   let resolveFinish: (() => void) | null = null;
   const finishPromise = new Promise<void>((resolve) => {
     resolveFinish = resolve;
@@ -134,21 +185,54 @@ async function runRecordingSession(
     const page = await context.newPage();
 
     await page.exposeFunction("__pwRecorderEvent", (payload: RecorderEventPayload) => {
-      if (events.length >= MAX_EVENTS) return;
-      if (!payload || typeof payload.selector !== "string" || !payload.selector.trim()) return;
-      let pageUrl = "";
-      try {
-        pageUrl = page.url();
-      } catch {
-        pageUrl = parsed.href;
+      if (events.length >= MAX_EVENTS) {
+        if (dbg && events.length === MAX_EVENTS) {
+          console.warn("[recorder] MAX_EVENTS reached; stopping capture to avoid OOM");
+        }
+        return;
       }
+      if (dbg) console.log("RECORDED STEP:", payload);
+      if (!payload) return;
+
+      const ts = typeof payload.timestamp === "number" ? payload.timestamp : Date.now();
+
+      if (payload.type === "navigate") {
+        const u = (payload.url || payload.pageUrl || "").trim();
+        if (!u) return;
+        events.push({
+          type: "navigate",
+          selector: "",
+          url: u,
+          pageUrl: u,
+          timestamp: ts,
+          reason: payload.reason,
+        });
+        return;
+      }
+
+      const selRaw = typeof payload.selector === "string" ? payload.selector.trim() : "";
+      const sel = selRaw.length > 0 ? selRaw : "xpath=//*";
+
+      if (payload.type === "change" || payload.type === "fill") {
+        events.push({
+          type: payload.type === "change" ? "change" : "fill",
+          selector: sel,
+          tag: payload.tag,
+          text: payload.text,
+          value: payload.value,
+          pageUrl: payload.pageUrl,
+          timestamp: ts,
+        });
+        return;
+      }
+
       events.push({
-        type: payload.type === "fill" ? "fill" : "click",
-        selector: payload.selector.trim(),
+        type: "click",
+        selector: sel,
         tag: payload.tag,
         text: payload.text,
-        value: payload.value,
-        pageUrl,
+        pageUrl: payload.pageUrl,
+        timestamp: ts,
       });
     });
     await page.exposeFunction("__pwRecorderFinish", () => {
@@ -201,9 +285,20 @@ async function runRecordingSession(
     emitGotoIfNeeded(parsed.href);
   } else {
     for (const ev of events) {
+      if (ev.type === "navigate") {
+        const u = ev.url?.trim() || ev.pageUrl?.trim() || parsed.href;
+        // One Playwright goto per recorded navigation event (lossless; do not merge SPA navigations).
+        scriptLines.push(`await page.goto('${escapeJsString(u)}');`);
+        const why = ev.reason ? ` (${ev.reason})` : "";
+        steps.push(`${stepNum++}. Navigate to ${u}${why}`);
+        lastNavKey = navKey(u);
+        continue;
+      }
+
       const at = ev.pageUrl?.trim() || parsed.href;
       emitGotoIfNeeded(at);
-      if (ev.type === "fill") {
+
+      if (ev.type === "fill" || ev.type === "change") {
         const isMasked = ev.value === "***";
         const fillVal = isMasked ? "" : ev.value ?? "";
         scriptLines.push(`await page.fill('${escapeJsString(ev.selector)}', '${escapeJsString(fillVal)}');`);
@@ -212,8 +307,9 @@ async function runRecordingSession(
           : fillVal.length === 0
             ? "(empty)"
             : `"${previewForStepLine(fillVal, 48)}"`;
+        const kind = ev.type === "change" ? "Change" : "Enter";
         steps.push(
-          `${stepNum++}. Enter ${valueHint} into ${ev.text || "field"} (${ev.selector})${isMasked ? " [password masked in script]" : ""}`
+          `${stepNum++}. ${kind} ${valueHint} into ${ev.text || "field"} (${ev.selector})${isMasked ? " [password masked in script]" : ""}`
         );
       } else {
         scriptLines.push(`await page.click('${escapeJsString(ev.selector)}');`);
@@ -222,10 +318,13 @@ async function runRecordingSession(
     }
   }
 
+  const rawSteps = toRawSteps(events);
+
   const usedNames = new Set<string>();
   const locators: RecorderLocator[] = [];
   const seenSel = new Set<string>();
   for (const ev of events) {
+    if (ev.type === "navigate" || !ev.selector.trim()) continue;
     if (seenSel.has(ev.selector)) continue;
     seenSel.add(ev.selector);
     locators.push({
@@ -238,6 +337,7 @@ async function runRecordingSession(
     playwrightScript: scriptLines.join("\n"),
     steps,
     locators,
+    rawSteps,
   };
 }
 
@@ -319,52 +419,22 @@ export function takeRecordingResult(): RecorderResult {
   return r;
 }
 
+/**
+ * Prefer `parsePlaywrightScriptToDsl` — returns canonical steps when parse succeeds;
+ * on total parse failure, falls back to non-empty script lines so nothing is silently empty.
+ */
 export function parsePlaywrightToSteps(script: string): {
   steps: string[];
   locators: RecorderLocator[];
+  parseErrors: string[];
 } {
-  const steps: string[] = [];
-  const locators: RecorderLocator[] = [];
-  const seenSel = new Set<string>();
-  const usedNames = new Set<string>();
-  let stepNum = 1;
-
-  const pushLocator = (selector: string, hint: string) => {
-    if (seenSel.has(selector)) return;
-    seenSel.add(selector);
-    locators.push({
-      name: uniqueLocatorName(hint, usedNames),
-      selector,
-    });
-  };
-
-  for (const raw of script.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
-
-    const goto = line.match(/await\s+page\.goto\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (goto) {
-      steps.push(`${stepNum++}. Navigate to ${goto[1]}`);
-      continue;
-    }
-
-    const fill = line.match(
-      /await\s+page\.fill\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]\s*\)/
-    );
-    if (fill) {
-      const sel = fill[1];
-      steps.push(`${stepNum++}. Enter text into field (${sel})`);
-      pushLocator(sel, "Field");
-      continue;
-    }
-
-    const click = line.match(/await\s+page\.click\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (click) {
-      const sel = click[1];
-      steps.push(`${stepNum++}. Click element (${sel})`);
-      pushLocator(sel, "Button");
-    }
+  const r = parsePlaywrightScriptToDsl(script);
+  if (r.dsl.length > 0) {
+    return { steps: r.canonicalSteps, locators: r.locators, parseErrors: r.errors };
   }
-
-  return { steps, locators };
+  const fallback = script
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !/^(import|export)\b/.test(l));
+  return { steps: fallback, locators: [], parseErrors: r.errors };
 }

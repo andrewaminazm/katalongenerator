@@ -7,17 +7,21 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node scripts/copy-extractor.mjs",
     "start": "node dist/index.js",
-    "playwright:install": "playwright install chromium"
+    "playwright:install": "playwright install chromium",
+    "extract-locators": "tsx scripts/extract-playwright-locators.ts"
   },
   "dependencies": {
-    "dotenv": "^16.4.7",
+    "adm-zip": "^0.5.17",
     "cors": "^2.8.5",
     "csv-parse": "^5.5.6",
+    "dotenv": "^16.4.7",
     "express": "^4.21.1",
+    "fast-xml-parser": "^4.5.0",
     "multer": "^1.4.5-lts.1",
     "playwright": "^1.49.1"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.12",

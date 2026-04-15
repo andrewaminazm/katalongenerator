@@ -8,12 +8,15 @@ dotenv.config({ path: path.join(__dirname, "..", ".env") });
 dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
 import express from "express";
 import { createApiRouter } from "./routes/api.js";
+import { logJiraTlsStartupHint } from "./services/jira.js";
 
 const PORT = Number(process.env.PORT) || 8787;
 
+logJiraTlsStartupHint();
+
 const app = express();
 app.use(cors({ origin: true }));
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "8mb" }));
 
 app.use("/api", createApiRouter());
 
@@ -30,7 +33,19 @@ app.use(
   }
 );
 
+const ollamaBase =
+  process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:11434";
+
 const server = app.listen(PORT, () => {
   console.log(`Katalon Ollama server listening on http://localhost:${PORT}`);
+  console.log(`Ollama API (generate): ${ollamaBase} — if generate fails with "fetch failed", run ollama serve and check this URL matches`);
 });
-server.setTimeout(200000);
+
+// Default 0 = no HTTP keep-alive timeout. Slow local Ollama + large imported OR lists often exceed 200s;
+// a finite timeout was closing the socket mid-generation (browser showed "Internal Server Error").
+const rawTimeout = process.env.SERVER_REQUEST_TIMEOUT_MS?.trim();
+const timeoutMs = rawTimeout !== undefined && rawTimeout !== "" ? Number(rawTimeout) : 0;
+server.setTimeout(Number.isFinite(timeoutMs) && timeoutMs >= 0 ? timeoutMs : 0);
+if (timeoutMs > 0) {
+  console.log(`HTTP server request timeout: ${timeoutMs} ms`);
+}

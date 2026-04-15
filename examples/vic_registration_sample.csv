@@ -1,0 +1,5 @@
+Summary,Description,Test Type,Test Set,Precondition,Steps,Priority
+Test Case ID,Description,Manual,,Precondition,Steps | Expected: Expected Result,Priority
+TC001,"Verify new service appears in list",Manual,,"Eligible user","1. Login to Superapp. 2. Navigate to service list. 3. Locate the service. | Expected: Service is displayed",High
+TC002,Verify popup for ineligible user,Manual,,"Ineligible user","1. Login to Superapp. 2. Navigate to service list. 3. Click the service. | Expected: Popup message appears",High
+TC003,Verify registration form loads,Manual,,"Eligible user","1. Login to Superapp. 2. Select the service. 3. Verify the registration form loads. | Expected: Form is shown",High

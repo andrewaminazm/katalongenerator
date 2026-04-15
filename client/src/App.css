@@ -60,6 +60,75 @@
   border-right: none;
 }
 
+.loc-convert-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.loc-convert-report {
+  margin: 0.5rem 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+  font-size: 0.8rem;
+  max-height: 280px;
+}
+
+.loc-convert-report table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.loc-convert-report th,
+.loc-convert-report td {
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.loc-convert-report th {
+  background: var(--bg);
+  font-weight: 600;
+}
+
+.loc-convert-report tr:last-child td {
+  border-bottom: none;
+}
+
+.loc-convert-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  word-break: break-word;
+}
+
+.conf-high {
+  color: #15803d;
+}
+
+.conf-medium {
+  color: #a16207;
+}
+
+.conf-low {
+  color: #b91c1c;
+}
+
+[data-theme="dark"] .conf-high {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .conf-medium {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .conf-low {
+  color: #f87171;
+}
+
 .tabs {
   display: flex;
   gap: 0.25rem;
@@ -116,6 +185,41 @@ textarea.input {
   font-size: 0.85rem;
 }
 
+/* LTR so "name = selector" stays readable with Arabic in labels or xpath (no RTL jumbling) */
+textarea.locator-preview-textarea {
+  direction: ltr;
+  text-align: left;
+  white-space: pre;
+  overflow-x: auto;
+  word-break: keep-all;
+  min-height: 28rem;
+}
+
+/*
+ * Record tab: Arabic (RTL) + English selectors (#id, CSS) in one line.
+ * Plaintext bidi keeps neutral punctuation from jumping into the wrong run.
+ */
+textarea.input.record-flow-textarea {
+  direction: ltr;
+  unicode-bidi: plaintext;
+  text-align: left;
+}
+
+.jira-steps-panel {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+textarea.input.jira-steps-textarea {
+  min-height: 12rem;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.88rem;
+  white-space: pre-wrap;
+}
+
 .row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -170,6 +274,16 @@ textarea.input {
   font-size: 0.8rem;
 }
 
+label.btn {
+  position: relative;
+}
+
+.field-clear-row {
+  margin-top: 0.35rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .stack {
   display: flex;
   flex-direction: column;
@@ -197,6 +311,57 @@ textarea.input {
 .hint {
   font-size: 0.8rem;
   color: var(--muted);
+  margin: 0;
+}
+
+/* `hidden` on file inputs breaks some folder / multi-file picks (browser quirks). */
+.file-input-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.katalon-import-feedback {
+  font-size: 0.85rem;
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  line-height: 1.4;
+}
+
+.katalon-import-feedback--success {
+  border-color: rgba(13, 110, 110, 0.45);
+  background: rgba(13, 110, 110, 0.09);
+  color: var(--text);
+}
+
+[data-theme="dark"] .katalon-import-feedback--success {
+  border-color: rgba(61, 184, 184, 0.45);
+  background: rgba(61, 184, 184, 0.12);
+}
+
+.katalon-import-feedback--error {
+  border-color: rgba(180, 35, 24, 0.35);
+  background: rgba(180, 35, 24, 0.08);
+  color: var(--danger);
+}
+
+[data-theme="dark"] .katalon-import-feedback--error {
+  border-color: rgba(249, 112, 102, 0.4);
+  background: rgba(249, 112, 102, 0.1);
+}
+
+.katalon-loaded-summary {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
   margin: 0;
 }
 
@@ -293,4 +458,105 @@ textarea.input {
   padding: 0.35rem 0.65rem;
   cursor: pointer;
   font-size: 0.8rem;
+}
+
+.lint-panel {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 0.8rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.lint-panel h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+}
+
+.lint-item {
+  margin-bottom: 0.35rem;
+  padding-left: 0.35rem;
+  border-left: 3px solid var(--border);
+}
+
+.lint-item.severity-error {
+  border-left-color: #c62828;
+}
+
+.lint-item.severity-warning {
+  border-left-color: #f9a825;
+}
+
+.lint-item.severity-info {
+  border-left-color: var(--muted);
+}
+
+.or-match-preview {
+  font-size: 0.78rem;
+  color: var(--muted);
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.csv-test-case-panel {
+  margin-top: 0.35rem;
+}
+
+.csv-test-case-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.csv-test-case-table-wrap {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.csv-test-case-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.csv-test-case-table th,
+.csv-test-case-table td {
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.csv-test-case-table th {
+  background: var(--surface);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.csv-col-check {
+  width: 2rem;
+}
+
+.csv-col-n {
+  width: 3.5rem;
+  text-align: right;
+}
+
+.csv-tc-id {
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
+
+.csv-tc-title {
+  word-break: break-word;
+  color: var(--muted);
 }

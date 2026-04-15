@@ -5,6 +5,82 @@ export interface ParsedCsvStep {
   description: string;
 }
 
+/** One test case row from exports like VIC (Summary + Steps + …). */
+export interface ParsedTestCaseRow {
+  /** 1-based data row index in the parsed CSV (after header). */
+  sourceRowIndex: number;
+  testCaseId: string;
+  title: string;
+  stepLines: string[];
+}
+
+/**
+ * Strip "| Expected: …" tail and split a Steps cell into numbered lines (1. … 2. …).
+ */
+export function expandStepsCell(stepsCell: string): string[] {
+  const trimmed = stepsCell.trim();
+  if (!trimmed) return [];
+  const pipeIdx = trimmed.search(/\s*\|\s*Expected:/i);
+  const main = (pipeIdx >= 0 ? trimmed.slice(0, pipeIdx) : trimmed).trim();
+  if (!main) return [];
+  const parts = main.split(/\s+(?=\d+\.\s)/).map((s) => s.trim()).filter(Boolean);
+  return parts.length ? parts : [main];
+}
+
+/**
+ * Parses test-case style CSV with a **Steps** column (e.g. VIC / Zephyr exports).
+ * Returns null if there is no Steps column — use {@link parseTestStepsCsv} instead.
+ */
+export function parseTestCaseCsvRows(csvText: string): ParsedTestCaseRow[] | null {
+  const text = csvText.replace(/^\uFEFF/, "");
+  const records = parse(text, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    relax_column_count: true,
+  }) as Record<string, string>[];
+
+  if (!records.length) return null;
+
+  const keys = Object.keys(records[0]);
+  const lower = new Map(keys.map((k) => [k.toLowerCase(), k]));
+  const stepsKey = lower.get("steps");
+  if (!stepsKey) return null;
+
+  const summaryKey = lower.get("summary") ?? keys[0];
+  const descKey = lower.get("description") ?? keys[1];
+
+  const rows: ParsedTestCaseRow[] = [];
+  let sourceRowIndex = 0;
+
+  for (const row of records) {
+    sourceRowIndex += 1;
+    const summary = (row[summaryKey] ?? "").trim();
+    const stepsCell = (row[stepsKey] ?? "").trim();
+    if (!stepsCell) continue;
+    if (/^test case id$/i.test(summary)) continue;
+    if (
+      /steps\s*\|\s*expected/i.test(stepsCell) &&
+      /expected result/i.test(stepsCell)
+    ) {
+      continue;
+    }
+
+    const title = (row[descKey] ?? "").trim();
+    const stepLines = expandStepsCell(stepsCell);
+    if (!stepLines.length) continue;
+
+    rows.push({
+      sourceRowIndex,
+      testCaseId: summary || `Row ${sourceRowIndex}`,
+      title,
+      stepLines,
+    });
+  }
+
+  return rows.length ? rows : null;
+}
+
 /**
  * Parses CSV with expected columns Step, Description (case-insensitive headers).
  * Falls back to first two columns if headers differ.
