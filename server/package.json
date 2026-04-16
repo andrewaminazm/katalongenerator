@@ -8,7 +8,8 @@
     "build": "tsc && node scripts/copy-extractor.mjs",
     "start": "node dist/index.js",
     "playwright:install": "playwright install chromium",
-    "extract-locators": "tsx scripts/extract-playwright-locators.ts"
+    "extract-locators": "tsx scripts/extract-playwright-locators.ts",
+    "docs:pdf": "tsx scripts/generate-project-guide-pdf.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.17",

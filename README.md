@@ -1,6 +1,101 @@
-# Katalon Script Generator
+# Katalon Script Generator (Katalon Groovy Generator)
 
-Production-oriented web tool that turns manual test steps, CSV files, Jira issues, or **Playwright-recorded flows** into **Katalon Studio Groovy** scripts. It uses a **local Ollama** model by default, with an optional **Google Gemini** backend when `GEMINI_API_KEY` is set on the server.
+Production-oriented web app that converts:
+
+- manual test steps (free-text)
+- CSV files
+- Jira issues
+- Playwright-recorded flows
+
+…into **Katalon Studio Groovy** scripts (WebUI / Mobile keywords).
+
+This repo supports two generation modes:
+
+- **Deterministic compiler (default)**: no LLM required for compiling steps → Groovy.
+- **Legacy LLM path (optional)**: uses **local Ollama** by default, with optional **Google Gemini** when `GEMINI_API_KEY` is set on the server.
+
+## Quickstart (local dev)
+
+Prerequisites:
+
+- Node.js **20+**
+- (Optional) Ollama running locally: `ollama serve`
+- (Optional) Playwright browsers (for auto-detect locators / record): see below
+
+Install:
+
+```bash
+npm install
+npm run install:all
+```
+
+Run (frontend + backend):
+
+```bash
+npm run dev
+```
+
+Open the UI (Vite prints the actual port):
+
+- `http://localhost:5173/`
+
+Backend API:
+
+- `http://localhost:8787`
+
+Playwright (only if you use record / auto-detect locators):
+
+```bash
+cd server
+npm run playwright:install
+```
+
+## How to use (UI)
+
+1. **Select platform**: Web (WebUI) or Mobile.
+2. **Paste steps** (one per line), for example:
+
+```text
+1-visit https://www.google.com/
+2-click Settings
+```
+
+3. **Add locators** (`Label = selector`) if you have them:
+
+```text
+Settings = //button[contains(normalize-space(.),'Settings') or contains(@aria-label,'Settings')]
+```
+
+4. Click **Generate** to get Groovy.
+
+Optional features you can enable in the UI:
+
+- **Auto-detect locators**: runs Playwright on a URL and merges results with your locator text.
+- **Record mode**: opens a headed browser *on the machine running the server*, records actions, and converts them into steps/locators.
+- **Convert to Katalon Locators**: converts Selenium/Cypress/Playwright locator styles into Katalon-friendly CSS/XPath.
+
+## Deterministic compiler vs LLM mode
+
+- **Deterministic (recommended)**:
+  - always emits a script (uses safe fallbacks when needed)
+  - includes waits before interactions
+  - performs Groovy validation + linting
+- **LLM mode (`deterministicCompiler: false`)**:
+  - uses Ollama or Gemini to draft Groovy
+  - still runs web post-processing + lint
+
+If a step cannot be matched to any locator label, the compiler uses a **fallback XPath** like:
+
+```xpath
+//*[contains(normalize-space(.),'Settings')]
+```
+
+This prevents silent wrong matches (for example, “click Settings” incorrectly clicking “Google Search”).
+
+## Documentation (PDF)
+
+- **Full project guide (Markdown)**: `docs/PROJECT_GUIDE.md`
+- **Full project guide (PDF)**: `docs/PROJECT_GUIDE.pdf`
 
 ## Architecture
 

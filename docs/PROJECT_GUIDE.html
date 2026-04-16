@@ -1,0 +1,202 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Project Guide — Katalon Script Generator</title>
+  <style>
+    :root {
+      --fg: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #ffffff;
+      --code-bg: #0b1020;
+      --code-fg: #e5e7eb;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    html, body { background: var(--bg); color: var(--fg); font-family: var(--sans); }
+    body { margin: 0; padding: 32px 44px; }
+    h1, h2, h3, h4 { margin: 22px 0 10px; }
+    h1 { font-size: 28px; letter-spacing: -0.01em; }
+    h2 { font-size: 20px; padding-top: 8px; border-top: 1px solid var(--border); }
+    h3 { font-size: 16px; }
+    p, li { font-size: 12.5px; line-height: 1.55; color: var(--fg); }
+    li { margin: 4px 0; }
+    ul { padding-left: 18px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    code.inline {
+      font-family: var(--mono);
+      font-size: 0.95em;
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    pre.code {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 14px 14px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      margin: 10px 0 14px;
+    }
+    pre.code code {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    figure.img { margin: 14px 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+    figure.img img { max-width: 100%; height: auto; border-radius: 8px; }
+    figure.img figcaption { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  </style>
+</head>
+<body>
+<h1>Project Guide — Katalon Script Generator</h1>
+<p>This document explains what the project is, how it works, how to run it, and how to use the UI to generate Katalon Groovy scripts.</p>
+<h2>What this project does</h2>
+<p>This app converts human-friendly test descriptions into **Katalon Studio Groovy** scripts:</p>
+<ul>
+<li>manual steps (free-text, one per line)</li>
+<li>CSV test steps</li>
+<li>Jira issues (extract steps from the issue)</li>
+<li>Playwright recordings (record in a browser and compile)</li>
+</ul>
+<p>The generated Groovy focuses on:</p>
+<ul>
+<li>**Web**: <code class="inline">WebUI.*</code> keywords + <code class="inline">TestObject</code> creation</li>
+<li>**Mobile**: <code class="inline">Mobile.*</code> keywords (where applicable)</li>
+</ul>
+<h2>Two generation paths</h2>
+<h3>1) Deterministic compiler (default)</h3>
+<p>This is the recommended path. It does **not** require an LLM to compile steps into Groovy.</p>
+<p>High-level flow:</p>
+<p>1. Parse steps into intents (click / type / verify / navigation / pressEnter…)</p>
+<p>2. Resolve locator hints to locator lines (<code class="inline">Label = selector</code>)</p>
+<p>3. Compile into ordered operations</p>
+<p>4. Assemble Groovy in a strict, readable structure</p>
+<p>5. Validate and lint the final output</p>
+<p>Important behavior:</p>
+<ul>
+<li>The compiler inserts **waits** before interactions.</li>
+<li>If a step cannot be matched to a locator label, it uses a **safe fallback XPath**:</li>
+<li>Example fallback for <code class="inline">click Settings</code>:</li>
+<li><code class="inline">//*[contains(normalize-space(.),&amp;#39;Settings&amp;#39;)]</code></li>
+<li>The matcher avoids “silent wrong matches” (e.g., <code class="inline">Settings</code> should never click <code class="inline">Google Search</code> just because only one locator exists).</li>
+</ul>
+<h3>2) Legacy LLM path (optional)</h3>
+<p>When <code class="inline">deterministicCompiler: false</code>, the backend builds a prompt and calls:</p>
+<ul>
+<li>**Ollama** (local, default), or</li>
+<li>**Gemini** (when <code class="inline">GEMINI_API_KEY</code> is configured)</li>
+</ul>
+<p>Then it runs the same post-processing and linting steps to reduce Katalon Studio failures.</p>
+<h2>UI overview</h2>
+<p>The UI is a single-page app where you:</p>
+<ul>
+<li>paste steps (one per line)</li>
+<li>optionally paste locators (<code class="inline">Label = selector</code>)</li>
+<li>choose platform + LLM provider (if using LLM mode)</li>
+<li>generate Groovy</li>
+</ul>
+<figure class="img"><img alt="UI screenshot" src="../assets/c__Users_Admin_AppData_Roaming_Cursor_User_workspaceStorage_1261c6d5313f7081241cf4879a8bfa92_images_image-ac9fd671-c292-4c76-bd00-1f23ccff77a0.png" /><figcaption>UI screenshot</figcaption></figure>
+<h2>Step format</h2>
+<p>Steps are free-text. The project includes “Test Intelligence” normalization and intent parsing.</p>
+<p>Examples:</p>
+<pre class="code"><code data-lang="text">1-visit https://www.google.com/
+2-click Settings
+3-type &quot;hello&quot; in search
+4-press enter</code></pre>
+<p>Guidelines:</p>
+<ul>
+<li>Put **one action per line**</li>
+<li>Prefer quoted text when typing values:</li>
+<li><code class="inline">type &amp;quot;john&amp;quot; in username</code></li>
+</ul>
+<h2>Locator format</h2>
+<p>Locators are entered as lines:</p>
+<pre class="code"><code data-lang="text">Settings = //button[contains(normalize-space(.),&#39;Settings&#39;) or contains(@aria-label,&#39;Settings&#39;)]
+Search Input = input[name=&#39;q&#39;]</code></pre>
+<p>Supported selector types:</p>
+<ul>
+<li>OR paths (Katalon Object Repository paths)</li>
+<li>CSS</li>
+<li>XPath</li>
+<li><code class="inline">name=...</code></li>
+<li>accessibility id (mobile)</li>
+</ul>
+<h3>Converting locators from other tools</h3>
+<p>The project includes a conversion API that can transform locators from:</p>
+<ul>
+<li>Playwright (<code class="inline">page.getByRole(...)</code>, <code class="inline">page.locator(...)</code>, etc.)</li>
+<li>Selenium (common styles)</li>
+<li>Cypress (<code class="inline">cy.get(...)</code> patterns)</li>
+</ul>
+<p>…into CSS/XPath that Katalon’s <code class="inline">TestObject.addProperty</code> can use.</p>
+<h2>Running locally (development)</h2>
+<h3>Prerequisites</h3>
+<ul>
+<li>Node.js 20+</li>
+<li>Optional: Ollama for LLM mode (<code class="inline">ollama serve</code>)</li>
+<li>Optional: Playwright browsers for auto-detect locators / record mode</li>
+</ul>
+<h3>Install</h3>
+<p>From repo root:</p>
+<pre class="code"><code data-lang="bash">npm install
+npm run install:all</code></pre>
+<h3>Run</h3>
+<p>From repo root:</p>
+<pre class="code"><code data-lang="bash">npm run dev</code></pre>
+<p>Default URLs:</p>
+<ul>
+<li>Frontend: <code class="inline">http://localhost:5173/</code></li>
+<li>Backend: <code class="inline">http://localhost:8787</code></li>
+</ul>
+<h3>Playwright browsers (optional)</h3>
+<pre class="code"><code data-lang="bash">cd server
+npm run playwright:install</code></pre>
+<h2>Backend API (high level)</h2>
+<p>Key endpoints:</p>
+<ul>
+<li><code class="inline">GET /api/health</code></li>
+<li><code class="inline">POST /api/generate</code></li>
+<li><code class="inline">POST /api/locators</code></li>
+<li>Record mode:</li>
+<li><code class="inline">POST /api/record/start</code></li>
+<li><code class="inline">GET /api/record/status</code></li>
+<li><code class="inline">GET /api/record/result</code></li>
+<li><code class="inline">POST /api/record/cancel</code></li>
+<li>Inputs:</li>
+<li><code class="inline">POST /api/parse-csv</code></li>
+<li><code class="inline">POST /api/jira/issue</code></li>
+</ul>
+<h2>Repo structure (mental model)</h2>
+<ul>
+<li><code class="inline">client/</code>: React + Vite UI</li>
+<li><code class="inline">server/</code>: Express backend + deterministic compiler</li>
+<li><code class="inline">server/src/services/katalonCompiler/</code>: deterministic compiler pipeline</li>
+<li><code class="inline">server/src/services/testIntelligence/</code>: intent parsing + expansion</li>
+<li><code class="inline">server/src/services/testDsl/</code>: step normalization/validation pipeline</li>
+</ul>
+<h2>Troubleshooting</h2>
+<h3>Port already in use</h3>
+<ul>
+<li>Backend uses <code class="inline">8787</code></li>
+<li>Frontend uses <code class="inline">5173</code> (Vite will auto-pick another port if busy)</li>
+</ul>
+<h3>Ollama errors</h3>
+<p>Make sure this URL works on the machine running the backend:</p>
+<ul>
+<li><code class="inline">http://127.0.0.1:11434</code></li>
+</ul>
+<h3>Record mode opens browser on the server machine</h3>
+<p>Record mode is **headed** and runs where the backend is running. If the backend is on a remote server, you’ll see the browser there (not on your laptop).</p>
+<h2>Security / config notes</h2>
+<ul>
+<li><code class="inline">.env</code> is gitignored; use <code class="inline">.env.example</code> as a template.</li>
+<li>Jira credentials are sent with the request and are not stored in generation history.</li>
+</ul>
+</body>
+</html>
