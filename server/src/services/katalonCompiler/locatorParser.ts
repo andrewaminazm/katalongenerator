@@ -51,6 +51,27 @@ export function classifyRhs(rhs: string, ctx?: PlaywrightConvertContext): {
     return { kind: "accessibilityId", propertyName: "accessibility id", value: acc[1].trim() };
   }
 
+  const rid = t.match(/^resource[_\s-]?id\s*=\s*(.+)$/i);
+  if (rid) {
+    return { kind: "resourceId", propertyName: "resource-id", value: rid[1].trim() };
+  }
+
+  const text = t.match(/^text\s*=\s*(.+)$/i);
+  if (text) {
+    // Katalon Mobile supports `text` property for Android; keep as a plain property.
+    return { kind: "css", propertyName: "text", value: text[1].trim() };
+  }
+
+  const label = t.match(/^label\s*=\s*(.+)$/i);
+  if (label) {
+    return { kind: "css", propertyName: "label", value: label[1].trim() };
+  }
+
+  const value = t.match(/^value\s*=\s*(.+)$/i);
+  if (value) {
+    return { kind: "css", propertyName: "value", value: value[1].trim() };
+  }
+
   if (t.startsWith("#")) {
     return { kind: "id", propertyName: "id", value: t.slice(1) };
   }
@@ -114,10 +135,12 @@ export function resolveLocators(lines: ParsedLocatorLine[], ctx?: PlaywrightConv
     const { kind, propertyName, value } = classified;
     const score = scoreLocator(kind, value);
     const prev = byLabel.get(pl.label);
-    const fb = computeSelectorFallbacks(value);
-    const fallbackProperties = fb.fallbacks.filter(
-      (p) => !(p.propertyName === propertyName && p.value === value)
-    );
+    const fallbackProperties =
+      kind === "accessibilityId" || kind === "resourceId"
+        ? []
+        : computeSelectorFallbacks(value).fallbacks.filter(
+            (p) => !(p.propertyName === propertyName && p.value === value)
+          );
     const candidate: ResolvedLocator = {
       label: pl.label,
       varBase: slugToVarBase(pl.label),

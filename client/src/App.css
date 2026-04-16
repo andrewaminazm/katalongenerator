@@ -442,6 +442,13 @@ label.btn {
   opacity: 0.9;
 }
 
+.mobile-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: var(--surface);
+}
+
 .history {
   margin-top: 1.25rem;
   padding-top: 1rem;

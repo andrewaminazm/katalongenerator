@@ -4,6 +4,7 @@ const BASE_SCORE: Record<LocatorKind, number> = {
   id: 100,
   name: 90,
   accessibilityId: 95,
+  resourceId: 97,
   css: 70,
   xpath: 50,
   orPath: 85,

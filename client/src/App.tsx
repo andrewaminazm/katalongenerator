@@ -14,6 +14,11 @@ import {
   cancelRecordingOnServer,
   recordTestFlow,
   exportToKatalonProject,
+  mobileStartSession,
+  mobileStopSession,
+  mobileExtractLocators,
+  mobileRecordStart,
+  mobileRecordStop,
   type HistoryEntry,
   type LintIssue,
   type LlmProvider,
@@ -143,6 +148,27 @@ export default function App() {
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
       : false
   );
+
+  // Mobile (Appium) session state
+  const [appiumUrl, setAppiumUrl] = useState("http://127.0.0.1:4723");
+  const [appiumCapsText, setAppiumCapsText] = useState(
+    JSON.stringify(
+      {
+        platformName: "Android",
+        "appium:automationName": "UiAutomator2",
+        "appium:deviceName": "Android Emulator",
+      },
+      null,
+      2
+    )
+  );
+  const [mobileSessionId, setMobileSessionId] = useState<string | null>(null);
+  const [mobilePlatform, setMobilePlatform] = useState<string | null>(null);
+  const [mobileStatus, setMobileStatus] = useState<string | null>(null);
+  const [mobileLoading, setMobileLoading] = useState(false);
+  const [mobileRecordProxyUrl, setMobileRecordProxyUrl] = useState<string | null>(null);
+  const [mobileRecordedSteps, setMobileRecordedSteps] = useState<string[] | null>(null);
+  const [mobileRecordedLocatorsText, setMobileRecordedLocatorsText] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
@@ -450,6 +476,106 @@ export default function App() {
     a.download = `${base}.groovy`;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const onMobileStart = async () => {
+    setError(null);
+    setMobileStatus(null);
+    setMobileLoading(true);
+    try {
+      const caps = JSON.parse(appiumCapsText) as Record<string, unknown>;
+      const r = await mobileStartSession({ appiumUrl: appiumUrl.trim(), capabilities: caps });
+      setMobileSessionId(r.sessionId);
+      setMobilePlatform(r.platformName);
+      setMobileStatus(`Session started: ${r.platformName} (${r.sessionId})`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start Appium session");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
+  const onMobileExtractLocators = async () => {
+    setError(null);
+    setMobileStatus(null);
+    if (!mobileSessionId) {
+      setError("Start an Appium session first.");
+      return;
+    }
+    setMobileLoading(true);
+    try {
+      const r = await mobileExtractLocators({ appiumUrl: appiumUrl.trim(), sessionId: mobileSessionId });
+      setMobilePlatform(r.platform);
+      const lines = r.locators.map((l) => `${l.name} = ${l.selector}`).join("\n");
+      setLocators((prev) => mergeLocatorBlock(prev, lines));
+      setMobileStatus(`Extracted ${r.locators.length} locator lines (${r.platform}). Merged into Locators.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not extract locators");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
+  const onMobileStop = async () => {
+    setError(null);
+    setMobileStatus(null);
+    if (!mobileSessionId) return;
+    setMobileLoading(true);
+    try {
+      await mobileStopSession({ appiumUrl: appiumUrl.trim(), sessionId: mobileSessionId });
+      setMobileStatus("Session stopped.");
+      setMobileSessionId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not stop Appium session");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
+  const onMobileRecordStart = async () => {
+    setError(null);
+    setMobileStatus(null);
+    setMobileLoading(true);
+    try {
+      const r = await mobileRecordStart({ appiumUrl: appiumUrl.trim() });
+      setMobileRecordProxyUrl(r.proxyUrl);
+      setMobileRecordedSteps(null);
+      setMobileRecordedLocatorsText(null);
+      setMobileStatus(`Recording started. Point Appium Inspector / driver to proxy URL: ${r.proxyUrl}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start recording");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
+  const onMobileRecordStop = async () => {
+    setError(null);
+    setMobileStatus(null);
+    setMobileLoading(true);
+    try {
+      const r = await mobileRecordStop();
+      setMobileRecordedSteps(r.steps);
+      setMobileRecordedLocatorsText(r.locatorsText);
+      setMobileStatus(`Recording stopped. Captured ${r.steps.length} steps and ${r.locatorsText ? "some" : "no"} locators.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not stop recording");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
+  const onMobileApplyRecording = () => {
+    if (!mobileRecordedSteps || mobileRecordedSteps.length === 0) {
+      setError("No recorded steps to apply.");
+      return;
+    }
+    setTab("manual");
+    setManualSteps(mobileRecordedSteps.join("\n"));
+    if (mobileRecordedLocatorsText?.trim()) {
+      setLocators((prev) => mergeLocatorBlock(prev, mobileRecordedLocatorsText));
+    }
+    setMobileStatus("Applied recorded steps to Manual steps and merged recorded locators into Locators.");
   };
 
   const onClearOutput = () => {
@@ -962,6 +1088,98 @@ export default function App() {
                 Must be a local Katalon project folder that contains <code>Test Cases</code>.
               </p>
             </div>
+
+            {platform === "mobile" && (
+              <div className="mobile-panel">
+                <h3 style={{ margin: "0 0 0.25rem" }}>Mobile (Appium)</h3>
+                <p className="hint" style={{ marginBottom: "0.5rem" }}>
+                  Start an Appium session, then extract locators from the current screen and merge them into the{" "}
+                  <strong>Locators</strong> box.
+                </p>
+                <div>
+                  <label className="field-label" htmlFor="appiumUrl">
+                    Appium server URL
+                  </label>
+                  <input
+                    id="appiumUrl"
+                    className="input"
+                    value={appiumUrl}
+                    onChange={(e) => setAppiumUrl(e.target.value)}
+                    placeholder="http://127.0.0.1:4723"
+                  />
+                </div>
+                <div>
+                  <label className="field-label" htmlFor="appiumCaps">
+                    Capabilities (JSON)
+                  </label>
+                  <textarea
+                    id="appiumCaps"
+                    className="input"
+                    value={appiumCapsText}
+                    onChange={(e) => setAppiumCapsText(e.target.value)}
+                    spellCheck={false}
+                    rows={10}
+                  />
+                </div>
+                <div className="row-actions" style={{ marginTop: "0.5rem" }}>
+                  <button type="button" className="btn btn-primary" onClick={onMobileStart} disabled={mobileLoading}>
+                    {mobileLoading ? "Working…" : "Start session"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onMobileExtractLocators}
+                    disabled={mobileLoading || !mobileSessionId}
+                  >
+                    Extract locators
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onMobileStop}
+                    disabled={mobileLoading || !mobileSessionId}
+                  >
+                    Stop session
+                  </button>
+                  <span className="hint" style={{ margin: 0 }}>
+                    {mobileSessionId ? `Session: ${mobileSessionId} ${mobilePlatform ? `(${mobilePlatform})` : ""}` : "No session"}
+                  </span>
+                </div>
+                <div className="row-actions" style={{ marginTop: "0.6rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={onMobileRecordStart}
+                    disabled={mobileLoading || Boolean(mobileRecordProxyUrl)}
+                    title="Starts a local proxy that records WebDriver commands"
+                  >
+                    Start Recording
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onMobileRecordStop}
+                    disabled={mobileLoading || !mobileRecordProxyUrl}
+                  >
+                    Stop Recording
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onMobileApplyRecording}
+                    disabled={!mobileRecordedSteps || mobileRecordedSteps.length === 0}
+                  >
+                    Apply to Steps+Locators
+                  </button>
+                </div>
+                {mobileRecordProxyUrl && (
+                  <p className="hint" style={{ marginTop: "0.35rem" }}>
+                    Proxy URL: <code>{mobileRecordProxyUrl}</code> (set this as your Appium server URL while recording)
+                  </p>
+                )}
+                {mobileStatus && <p className="status-msg" style={{ marginTop: "0.35rem" }}>{mobileStatus}</p>}
+              </div>
+            )}
 
              <div>
                <label className="field-label" htmlFor="stylePass">

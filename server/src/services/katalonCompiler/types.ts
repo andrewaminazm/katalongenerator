@@ -5,6 +5,7 @@ export type LocatorKind =
   | "css"
   | "xpath"
   | "accessibilityId"
+  | "resourceId"
   /** Object Repository path — use findTestObject, not inline TestObject */
   | "orPath";
 

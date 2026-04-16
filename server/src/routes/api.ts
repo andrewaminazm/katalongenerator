@@ -68,6 +68,20 @@ import {
   normalizeFailureReport,
   runLocatorHealing,
 } from "../services/healing/index.js";
+import {
+  startAppiumSession,
+  stopAppiumSession,
+  getAppiumPageSource,
+  getAppiumSession,
+} from "../services/mobile/appiumClient.js";
+import { parseMobilePageSource } from "../services/mobile/mobileSourceParser.js";
+import { extractMobileLocatorLines } from "../services/mobile/mobileLocatorExtractor.js";
+import {
+  startAppiumRecordProxy,
+  stopAppiumRecordProxy,
+  convertCommandsToMobileArtifacts,
+  type AppiumProxyRecording,
+} from "../services/mobile/appiumRecordProxy.js";
 import type {
   GenerateRequestBody,
   LlmProvider,
@@ -279,6 +293,8 @@ function rmFileIfExists(p: string): void {
   }
 }
 
+let activeMobileRecording: AppiumProxyRecording | null = null;
+
 export function createApiRouter(): express.Router {
   const router = express.Router();
 
@@ -292,6 +308,116 @@ export function createApiRouter(): express.Router {
       geminiConfigured,
       defaultGeminiModel: DEFAULT_GEMINI_MODEL,
     });
+  });
+
+  router.post("/mobile/session/start", async (req, res) => {
+    try {
+      const appiumUrl = String(req.body?.appiumUrl ?? "").trim();
+      const capabilities = req.body?.capabilities;
+      if (!appiumUrl) {
+        res.status(400).json({ error: "appiumUrl is required" });
+        return;
+      }
+      if (!capabilities || typeof capabilities !== "object") {
+        res.status(400).json({ error: "capabilities must be a JSON object" });
+        return;
+      }
+      const r = await startAppiumSession({
+        appiumUrl,
+        capabilities: capabilities as Record<string, unknown>,
+      });
+      const platformName = String((r.capabilities as any)?.platformName ?? "").toLowerCase();
+      const platform =
+        platformName.includes("android") ? "android" : platformName.includes("ios") ? "ios" : "unknown";
+      res.json({
+        sessionId: r.sessionId,
+        platformName: platform,
+        capabilities: r.capabilities,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  router.post("/mobile/session/stop", async (req, res) => {
+    try {
+      const appiumUrl = String(req.body?.appiumUrl ?? "").trim();
+      const sessionId = String(req.body?.sessionId ?? "").trim();
+      if (!appiumUrl || !sessionId) {
+        res.status(400).json({ error: "Requires { appiumUrl, sessionId }" });
+        return;
+      }
+      await stopAppiumSession({ appiumUrl, sessionId });
+      res.json({ ok: true });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  router.post("/mobile/locators", async (req, res) => {
+    try {
+      const appiumUrl = String(req.body?.appiumUrl ?? "").trim();
+      const sessionId = String(req.body?.sessionId ?? "").trim();
+      if (!appiumUrl || !sessionId) {
+        res.status(400).json({ error: "Requires { appiumUrl, sessionId }" });
+        return;
+      }
+      const src = await getAppiumPageSource({ appiumUrl, sessionId });
+      const parsed = parseMobilePageSource(src);
+      const locs = extractMobileLocatorLines(parsed.nodes);
+      const session = await getAppiumSession({ appiumUrl, sessionId }).catch(() => ({}));
+      res.json({
+        platform: parsed.platform,
+        session,
+        locators: locs,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  router.post("/mobile/record/start", async (req, res) => {
+    try {
+      const targetAppiumUrl = String(req.body?.appiumUrl ?? "").trim();
+      if (!targetAppiumUrl) {
+        res.status(400).json({ error: "appiumUrl is required" });
+        return;
+      }
+      if (activeMobileRecording) {
+        res.status(409).json({ error: "A mobile recording is already active. Stop it first." });
+        return;
+      }
+      const rec = await startAppiumRecordProxy({ targetAppiumUrl });
+      activeMobileRecording = rec;
+      res.json({ proxyUrl: rec.proxyUrl, recordingId: rec.id });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  router.post("/mobile/record/stop", async (_req, res) => {
+    try {
+      if (!activeMobileRecording) {
+        res.status(400).json({ error: "No active mobile recording" });
+        return;
+      }
+      const rec = activeMobileRecording;
+      activeMobileRecording = null;
+      await stopAppiumRecordProxy(rec);
+      const artifacts = convertCommandsToMobileArtifacts(rec.commands);
+      res.json({
+        steps: artifacts.steps,
+        locatorsText: artifacts.locatorsText,
+        rawCommands: rec.commands,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
   });
 
   router.post("/export/katalon", (req, res) => {

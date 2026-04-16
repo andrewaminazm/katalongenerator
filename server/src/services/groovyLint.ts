@@ -58,6 +58,24 @@ export function lintGroovy(
     }
   });
 
+  if (options?.platform === "mobile" && /\bWebUI\./.test(code)) {
+    const idx = lines.findIndex((l) => /\bWebUI\./.test(l));
+    issues.push({
+      rule: "no-webui-on-mobile",
+      severity: "error",
+      line: idx >= 0 ? idx + 1 : undefined,
+      message: "Mobile scripts must not use WebUI.* — use Mobile.* keywords only.",
+    });
+  }
+
+  if (options?.platform === "mobile" && /\b(page\.|locator\(|getByRole\(|getByLabel\(|cy\.)/i.test(code)) {
+    issues.push({
+      rule: "no-playwright-cypress-on-mobile",
+      severity: "error",
+      message: "Mobile scripts must not contain Playwright/Cypress syntax — only Katalon Mobile.* + TestObject.",
+    });
+  }
+
   if (options?.platform === "mobile" && /Mobile\.openBrowser\s*\(/i.test(code)) {
     const idx = lines.findIndex((l) => /Mobile\.openBrowser\s*\(/i.test(l));
     issues.push({

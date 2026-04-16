@@ -5,7 +5,9 @@ import { normalizeKatalonWebGroovy } from "../groovyLint.js";
  */
 export function autoFixGroovy(code: string, platform: "web" | "mobile"): string {
   let c = code.replace(/\bwebUI\./g, "WebUI.");
-  c = c.replace(/\bmobile\./g, "Mobile.");
+  // Only fix keyword calls like `mobile.tap(...)` → `Mobile.tap(...)`.
+  // Do NOT rewrite import package segments like `com.kms.katalon.core.mobile.keyword...`.
+  c = c.replace(/(?<!core\.)\bmobile\./g, "Mobile.");
   if (platform === "web") {
     c = normalizeKatalonWebGroovy(c);
   }

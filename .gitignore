@@ -6,3 +6,6 @@ server/data/history.json
 .env
 server/.env
 client/dist/
+
+# Local scratch / smoke-test outputs (not source)
+katalon-temp*/

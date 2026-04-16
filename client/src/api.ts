@@ -135,6 +135,96 @@ export interface ExportKatalonResponse {
   tcPath?: string;
 }
 
+export interface MobileSessionStartResponse {
+  sessionId: string;
+  platformName: "android" | "ios" | "unknown";
+  capabilities: Record<string, unknown>;
+}
+
+export interface MobileLocatorItem {
+  name: string;
+  selector: string;
+  kind: string;
+  confidence: "high" | "medium" | "low";
+}
+
+export async function mobileStartSession(params: {
+  appiumUrl: string;
+  capabilities: Record<string, unknown>;
+}): Promise<MobileSessionStartResponse> {
+  const res = await fetch(`${API_BASE}/api/mobile/session/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<MobileSessionStartResponse> & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data as MobileSessionStartResponse;
+}
+
+export async function mobileStopSession(params: {
+  appiumUrl: string;
+  sessionId: string;
+}): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/mobile/session/stop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+}
+
+export async function mobileExtractLocators(params: {
+  appiumUrl: string;
+  sessionId: string;
+}): Promise<{ platform: string; locators: MobileLocatorItem[] }> {
+  const res = await fetch(`${API_BASE}/api/mobile/locators`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = (await res.json().catch(() => ({}))) as { platform?: string; locators?: MobileLocatorItem[]; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return { platform: data.platform ?? "unknown", locators: data.locators ?? [] };
+}
+
+export interface MobileRecordStartResponse {
+  proxyUrl: string;
+  recordingId: string;
+}
+
+export interface MobileRecordStopResponse {
+  steps: string[];
+  locatorsText: string;
+  rawCommands: unknown[];
+}
+
+export async function mobileRecordStart(params: { appiumUrl: string }): Promise<MobileRecordStartResponse> {
+  const res = await fetch(`${API_BASE}/api/mobile/record/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<MobileRecordStartResponse> & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data as MobileRecordStartResponse;
+}
+
+export async function mobileRecordStop(): Promise<MobileRecordStopResponse> {
+  const res = await fetch(`${API_BASE}/api/mobile/record/stop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<MobileRecordStopResponse> & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return {
+    steps: data.steps ?? [],
+    locatorsText: data.locatorsText ?? "",
+    rawCommands: data.rawCommands ?? [],
+  };
+}
+
 export interface KatalonUploadCounts {
   objectRepository: number;
   testCases: number;

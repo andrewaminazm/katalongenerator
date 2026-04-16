@@ -80,6 +80,7 @@ export function compileActions(
 ): CompileActionsResult {
   const warnings: string[] = [];
   const operations: InternalOp[] = [];
+  const errors: string[] = [];
   const state = new StateTracker();
   const { parsedLines, selectorByTestObjectLabel, playwrightContextSelectors } = options;
   const pageUrl = options.defaultUrl?.trim();
@@ -180,6 +181,16 @@ export function compileActions(
       }
       case "setText":
       case "mobileSetText": {
+        if (options.platform === "mobile" && !intent.text?.trim()) {
+          errors.push(
+            `mobileSetText: missing value — add quoted text, e.g. type \"john\" in username (step: "${(intent as any).targetHint ?? ""}")`
+          );
+          operations.push({
+            kind: "compilerComment",
+            text: `ERROR: mobileSetText missing value for "${(intent as any).targetHint ?? ""}"`,
+          });
+          break;
+        }
         const loc = ensureLoc(intent.targetHint, intentIdx, "type", intent.kind);
         state.setFromLocator(loc);
         const stepComment = stepCommentFromEmbeddedHint("type", intent.targetHint);
@@ -242,7 +253,7 @@ export function compileActions(
     }
   }
 
-  return { operations, warnings, errors: [] };
+  return { operations, warnings, errors };
 }
 
 export { DEFAULT_WAIT_SEC };

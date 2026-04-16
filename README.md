@@ -74,6 +74,60 @@ Optional features you can enable in the UI:
 - **Record mode**: opens a headed browser *on the machine running the server*, records actions, and converts them into steps/locators.
 - **Convert to Katalon Locators**: converts Selenium/Cypress/Playwright locator styles into Katalon-friendly CSS/XPath.
 
+### Mobile (Appium) workflow
+
+When **Platform = Mobile**, the app supports **Appium session control**, **page-source locator extraction**, and **Mobile Record mode** using a **WebDriver command log**.
+
+#### Prerequisites (Mobile)
+
+- Appium server running (default `http://127.0.0.1:4723`)
+- A connected device/emulator (Android/iOS)
+- Your Appium capabilities JSON
+
+#### Mobile locator extraction (page source)
+
+In the UI, use the **Mobile (Appium)** panel:
+
+1. Enter Appium URL + capabilities JSON
+2. Click **Start session**
+3. Navigate to the desired screen on the device
+4. Click **Extract locators**
+
+Extracted locators are merged into the **Locators** box as `Label = selector` lines.
+
+Locator priority (strict):
+
+1. **Android** `resource-id`
+2. `accessibility id` (Android `content-desc`, iOS `name`)
+3. `text` / `label`
+4. `xpath` (last resort)
+
+Example locator lines:
+
+```text
+Login = resource-id=com.app:id/login
+Username = accessibility id = username
+```
+
+#### Mobile Record mode (Appium/WebDriver command log)
+
+Mobile recording works by running a **local proxy** that forwards WebDriver traffic to the real Appium server while logging all commands.
+
+1. Click **Start Recording** → UI shows a **Proxy URL**
+2. In **Appium Inspector** (or your test runner), set the Appium server URL to that **Proxy URL**
+3. Perform actions (tap/type) on the device
+4. Click **Stop Recording**
+5. Click **Apply to Steps+Locators** to populate:
+   - Manual steps
+   - Locators box
+
+The recorder converts WebDriver commands into steps like:
+
+```text
+tap login
+type username "john"
+```
+
 ## Deterministic compiler vs LLM mode
 
 - **Deterministic (recommended)**:
@@ -181,6 +235,8 @@ The JSON response includes `lint`: an array of issues such as:
 | `invalid-selenium-import` | error | Bad WebDriver-related imports (web) |
 | `webui-wait-typo` | error | e.g. `waitforElementVisible` vs `waitForElementVisible` |
 | `mobile-openBrowser-review` | warning | `Mobile.openBrowser` may be wrong for native/hybrid flows |
+| `no-webui-on-mobile` | error | Mobile scripts must not contain `WebUI.*` |
+| `no-playwright-cypress-on-mobile` | error | Mobile scripts must not contain Playwright/Cypress syntax |
 | `unknown-findTestObject` | warning | OR path not in known project/locator list |
 | `formatting` / `top-level-imports` | info | Style hints |
 
@@ -306,6 +362,11 @@ Open **http://localhost:5173** (or the port Vite prints if 5173 is busy).
 | `DELETE` | `/api/history` | Clear history file |
 | `POST` | `/api/heal/locator` | Self-healing: JSON body with `url`, `stepId`, `action`, `failedLocator: { type, value }`, optional `domSnapshot`, `maxRetries`, `skipAi` → ranked attempts, optional `suggestedKatalonSnippet`, `memoryUpdated` |
 | `GET` | `/api/heal/memory` | Learned locator fixes (`server/data/healing-memory.json`) |
+| `POST` | `/api/mobile/session/start` | Start Appium session: `{ appiumUrl, capabilities }` → `{ sessionId, platformName, capabilities }` |
+| `POST` | `/api/mobile/locators` | Extract mobile locators from `getPageSource`: `{ appiumUrl, sessionId }` → `{ platform, locators[] }` |
+| `POST` | `/api/mobile/session/stop` | Stop Appium session: `{ appiumUrl, sessionId }` |
+| `POST` | `/api/mobile/record/start` | Start mobile record proxy: `{ appiumUrl }` → `{ proxyUrl, recordingId }` |
+| `POST` | `/api/mobile/record/stop` | Stop recording → `{ steps[], locatorsText, rawCommands[] }` |
 
 ### LLM integration
 

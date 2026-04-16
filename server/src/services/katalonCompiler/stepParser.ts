@@ -62,8 +62,29 @@ export function parseStepLine(step: string, platform: "web" | "mobile"): StepInt
     }
     if (/\b(type|enter|input|set\s+text)\b/i.test(lower)) {
       const q = extractQuoted(raw);
-      const text = q ?? "";
-      return { kind: "mobileSetText", targetHint: raw, text };
+      if (q) {
+        const hint = raw
+          .replace(/["'“”][^"'“”]+["'“”]/g, "")
+          .replace(/\b(type|enter|input|fill|set\s+text|in|into|on|the|a|an)\b/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        return { kind: "mobileSetText", targetHint: hint || raw, text: q };
+      }
+
+      // Try to infer `type <target> <value>` (last token as value).
+      const rest = raw.replace(/^.*?\b(type|enter|input|set\s+text)\b/i, "").trim();
+      const m = rest.match(/^(.+?)\s+([^\s]+)\s*$/);
+      if (m) {
+        const hint = normalizeLocatorHint(m[1]) || m[1];
+        return { kind: "mobileSetText", targetHint: hint || raw, text: m[2] };
+      }
+
+      // Missing value — keep empty; compile step will reject with validation error.
+      const hint = raw
+        .replace(/\b(type|enter|input|fill|set\s+text|in|into|on|the|a|an)\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return { kind: "mobileSetText", targetHint: hint || raw, text: "" };
     }
   }
 
