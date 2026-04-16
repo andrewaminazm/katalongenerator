@@ -1,5 +1,8 @@
 import express from "express";
 import multer from "multer";
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 import { buildKatalonPrompt, type PromptExtraOptions } from "../services/promptBuilder.js";
 import {
   extractLocators,
@@ -43,8 +46,10 @@ import { matchStepsToOr, formatOrSuggestionsForPrompt } from "../services/orMatc
 import { extractOrPathsFromLocatorLines } from "../services/locatorPaths.js";
 import { lintGroovy, normalizeKatalonWebGroovy, simplifyGroovyFormatting } from "../services/groovyLint.js";
 import { compileKatalonScript } from "../services/katalonCompiler/index.js";
+import { autoFixGroovy } from "../services/katalonCompiler/autoFixEngine.js";
+import { validateKatalonGroovy } from "../services/katalonCompiler/validationLayer.js";
 import { convertLocatorLines } from "../services/katalonCompiler/universalLocatorConverter.js";
-import { sanitizeKatalonLocatorLines } from "../services/locatorPipeline/autoFixLocatorEngine.js";
+import { sanitizeKatalonLocatorLines, stripPlaywrightLeakageFromGroovy } from "../services/locatorPipeline/autoFixLocatorEngine.js";
 import { runUniversalTestStepIntelligence } from "../services/testDsl/universalTestStepIntelligence.js";
 import {
   compareRecordingToDslSteps,
@@ -130,6 +135,150 @@ function healingPayload(body: GenerateRequestBody): { healing: Record<string, un
   };
 }
 
+function normalizeUserPath(p: string): string {
+  return p.trim().replace(/^"|"$/g, "");
+}
+
+function isDirectory(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function toPosixRel(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
+function sanitizeTestCaseName(raw: string): string {
+  const s = raw.trim();
+  if (!s) return "";
+  if (s.includes("..")) return "";
+  if (/[\\/]/.test(s)) return "";
+  // Windows reserved characters + control chars
+  const cleaned = s.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").trim();
+  return cleaned.replace(/\s+/g, " ");
+}
+
+function dedupeImportsGroovy(code: string): string {
+  const lines = code.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of lines) {
+    const m = line.match(/^\s*import\s+.+$/);
+    if (!m) {
+      out.push(line);
+      continue;
+    }
+    const key = line.trim().replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(line);
+  }
+  const text = out.join("\n").trimEnd();
+  return text.length ? `${text}\n` : "";
+}
+
+function normalizeGroovyNewlines(code: string): string {
+  // Strip UTF-8 BOM if present (Katalon Groovy editor can behave oddly with BOM).
+  let c = code.replace(/^\uFEFF/, "");
+  // Some clients may send Groovy with literal "\n" sequences instead of actual newlines.
+  // If we detect that, unescape it so downstream cleanup (dedupe, lint) works.
+  if (!c.includes("\n") && c.includes("\\n")) {
+    c = c.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+  }
+  return c;
+}
+
+function stripBomEverywhere(code: string): string {
+  return code.replace(/\uFEFF/g, "");
+}
+
+function stripLeadingControlCharsPerLine(code: string): string {
+  // Remove non-printable leading chars that can show up as "?" in some editors.
+  return code
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[\u0000-\u001F\u007F\uFEFF]+/, ""))
+    .join("\n");
+}
+
+function sanitizeImportLines(code: string): string {
+  // Some clients embed invisible chars before `import` (looks like `?import ...` in Studio).
+  return code
+    .split(/\r?\n/)
+    .map((line) => {
+      const t = line.replace(/^[\u0000-\u001F\u007F\uFEFF]+/, "");
+      if (/^\s*import\b/i.test(t)) return t.replace(/^[\u0000-\u001F\u007F\uFEFF]*import\b/i, "import");
+      const idx = t.search(/\bimport\b/i);
+      if (idx > 0) {
+        // Strip junk prefix before the first `import` token (common when invisible chars break trimming).
+        return t.slice(idx).replace(/^import\b/i, "import");
+      }
+      // Literal junk prefixes like `u0001import ...` — keep only from `import` onward.
+      const m2 = t.match(/^(.*?)(import\b.*)$/i);
+      if (m2?.[2] && !/^\s*\/\//.test(t)) return m2[2];
+      return t;
+    })
+    .join("\n");
+}
+
+function readTcName(tcXml: string): string | null {
+  const m = tcXml.match(/<name>\s*([^<]*?)\s*<\/name>/i);
+  return m ? m[1].trim() : null;
+}
+
+function dedupeConsecutiveActionsGroovy(code: string): string {
+  // Remove repeated consecutive lines like:
+  // WebUI.waitForPageLoad(10)
+  // WebUI.waitForPageLoad(10)
+  //
+  // Keep ordering; only collapse exact consecutive duplicates (ignoring trailing whitespace).
+  const lines = code.split(/\r?\n/);
+  const out: string[] = [];
+  let prevKey: string | null = null;
+  for (const line of lines) {
+    const key = line.trimEnd();
+    if (key.length === 0) {
+      out.push(line);
+      prevKey = null;
+      continue;
+    }
+    if (prevKey !== null && key === prevKey) {
+      continue;
+    }
+    out.push(line);
+    prevKey = key;
+  }
+  return out.join("\n");
+}
+
+function buildTcXml(name: string, guid: string): string {
+  // Katalon requires a .tc metadata file (sibling of the folder) to bind Script.groovy.
+  // Template must include <variables/> for Studio to reliably load the test case.
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<TestCaseEntity>\n   <description></description>\n   <name>${name}</name>\n   <tag></tag>\n   <comment></comment>\n   <recordOption>OTHER</recordOption>\n   <testCaseGuid>${guid}</testCaseGuid>\n   <variables/>\n</TestCaseEntity>\n`;
+}
+
+function rmDirIfExists(p: string): void {
+  try {
+    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) {
+      fs.rmSync(p, { recursive: true, force: true });
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function rmFileIfExists(p: string): void {
+  try {
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+      fs.unlinkSync(p);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function createApiRouter(): express.Router {
   const router = express.Router();
 
@@ -143,6 +292,152 @@ export function createApiRouter(): express.Router {
       geminiConfigured,
       defaultGeminiModel: DEFAULT_GEMINI_MODEL,
     });
+  });
+
+  router.post("/export/katalon", (req, res) => {
+    try {
+      const body = req.body as {
+        projectPath?: unknown;
+        testCaseName?: unknown;
+        script?: unknown;
+        createTcFile?: unknown;
+      };
+
+      const projectPath = normalizeUserPath(String(body.projectPath ?? ""));
+      const requestedName = String(body.testCaseName ?? "");
+      const scriptRaw = String(body.script ?? "");
+      const createTcFile = body.createTcFile !== false;
+
+      if (!projectPath) {
+        res.status(400).json({ error: "projectPath is required" });
+        return;
+      }
+      if (!isDirectory(projectPath)) {
+        res.status(400).json({ error: "projectPath must be an existing directory" });
+        return;
+      }
+      const testCasesRoot = path.join(projectPath, "Test Cases");
+      if (!isDirectory(testCasesRoot)) {
+        res.status(400).json({ error: 'Invalid Katalon project: missing "Test Cases" folder' });
+        return;
+      }
+
+      const baseName = sanitizeTestCaseName(requestedName);
+      if (!baseName) {
+        res.status(400).json({
+          error:
+            "testCaseName is required and must not contain path separators (/) or (\\) or '..'",
+        });
+        return;
+      }
+      if (!scriptRaw.trim()) {
+        res.status(400).json({ error: "script is required" });
+        return;
+      }
+      if (!createTcFile) {
+        res.status(400).json({ error: "createTcFile must be true — Katalon requires a sibling .tc file next to the test case folder" });
+        return;
+      }
+
+      // Ensure "clean script" rules.
+      let script = normalizeGroovyNewlines(scriptRaw);
+      script = dedupeImportsGroovy(script);
+      script = stripPlaywrightLeakageFromGroovy(script);
+      // Web normalization also fixes common import/openBrowser issues and removes invalid Selenium imports.
+      script = normalizeKatalonWebGroovy(script);
+      script = autoFixGroovy(script, "web");
+      // Normalization may add/reshape imports; dedupe again and strip any stray BOM chars.
+      script = dedupeImportsGroovy(script);
+      script = sanitizeImportLines(script);
+      script = dedupeImportsGroovy(script);
+      script = sanitizeImportLines(script);
+      script = stripLeadingControlCharsPerLine(stripBomEverywhere(script));
+      script = dedupeConsecutiveActionsGroovy(script);
+
+      if (!script.trim()) {
+        res.status(422).json({ error: "Export failed: script became empty after sanitization" });
+        return;
+      }
+
+      const v = validateKatalonGroovy(script);
+      if (v.errors.length > 0) {
+        res.status(422).json({ error: `Groovy validation failed:\n- ${v.errors.join("\n- ")}` });
+        return;
+      }
+      const lint = lintGroovy(script, new Set(), { platform: "web" });
+      const lintErrors = lint.filter((i) => i.severity === "error");
+      if (lintErrors.length > 0) {
+        res.status(422).json({
+          error: `Groovy lint failed:\n- ${lintErrors.map((e) => `${e.rule}: ${e.message}`).join("\n- ")}`,
+        });
+        return;
+      }
+
+      const finalName = baseName;
+
+      // Katalon layout (required):
+      // Test Cases/<Name>.tc
+      // Scripts/<Name>/Script.groovy
+      const scriptsRoot = path.join(projectPath, "Scripts");
+      if (!isDirectory(scriptsRoot)) {
+        res.status(400).json({ error: 'Invalid Katalon project: missing "Scripts" folder' });
+        return;
+      }
+
+      const scriptDir = path.join(scriptsRoot, finalName);
+      const tcSiblingPath = path.join(testCasesRoot, `${finalName}.tc`);
+
+      // Clean slate: remove prior script folder + .tc (and legacy wrong placements).
+      rmDirIfExists(scriptDir);
+      rmFileIfExists(tcSiblingPath);
+      // Legacy wrong: `Test Cases/<Name>/Script.groovy` (folder-based TC layout)
+      rmDirIfExists(path.join(testCasesRoot, finalName));
+      // Legacy wrong: `.tc` inside a folder
+      rmFileIfExists(path.join(testCasesRoot, finalName, `${finalName}.tc`));
+
+      fs.mkdirSync(scriptDir, { recursive: true });
+
+      const scriptPath = path.join(scriptDir, "Script.groovy");
+      fs.writeFileSync(scriptPath, script, "utf8");
+
+      const guid = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      const tcXml = buildTcXml(finalName, guid);
+      fs.writeFileSync(tcSiblingPath, tcXml, "utf8");
+
+      if (!fs.existsSync(scriptPath) || !fs.existsSync(tcSiblingPath)) {
+        res.status(500).json({ error: "Export failed: Script.groovy or .tc was not written to disk" });
+        return;
+      }
+      const scriptBytes = fs.statSync(scriptPath).size;
+      const tcBytes = fs.statSync(tcSiblingPath).size;
+      if (scriptBytes <= 0 || tcBytes <= 0) {
+        res.status(500).json({ error: "Export failed: Script.groovy or .tc is empty on disk" });
+        return;
+      }
+      const diskScript = fs.readFileSync(scriptPath, "utf8");
+      if (!diskScript.trim()) {
+        res.status(500).json({ error: "Export failed: Script.groovy contains no non-whitespace content" });
+        return;
+      }
+      const diskTc = fs.readFileSync(tcSiblingPath, "utf8");
+      const tcName = readTcName(diskTc);
+      if (!tcName || tcName !== finalName) {
+        res.status(500).json({ error: `Export failed: .tc <name> mismatch (expected '${finalName}', got '${tcName ?? ""}')` });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: "Test case created successfully",
+        testCaseName: finalName,
+        path: toPosixRel(path.join("Test Cases", `${finalName}.tc`)),
+        scriptPath,
+        tcPath: tcSiblingPath,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
+    }
   });
 
   router.post("/heal/locator", async (req, res, next) => {

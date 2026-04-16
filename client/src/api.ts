@@ -111,6 +111,30 @@ export interface GenerateResponse {
   deterministic?: boolean;
 }
 
+export interface ExportKatalonPayload {
+  projectPath: string;
+  testCaseName: string;
+  script: string;
+  /**
+   * Must be true. Katalon requires a sibling metadata file:
+   * `Test Cases/<TestCaseName>.tc` next to `Test Cases/<TestCaseName>/Script.groovy`.
+   */
+  createTcFile?: boolean;
+}
+
+export interface ExportKatalonResponse {
+  success: boolean;
+  /** Relative path inside the project, e.g. `Test Cases/TC_Login` */
+  path: string;
+  message?: string;
+  /** Actual name used after auto-unique. */
+  testCaseName: string;
+  /** Absolute script path on disk. */
+  scriptPath?: string;
+  /** Absolute .tc path on disk (when created). */
+  tcPath?: string;
+}
+
 export interface KatalonUploadCounts {
   objectRepository: number;
   testCases: number;
@@ -306,6 +330,19 @@ function sleep(ms: number): Promise<void> {
 /** Clears a stuck server recording (closed browser tab, refreshed UI, etc.). */
 export async function cancelRecordingOnServer(): Promise<void> {
   await fetch(`${API_BASE}/api/record/cancel`, { method: "POST" });
+}
+
+export async function exportToKatalonProject(
+  payload: ExportKatalonPayload
+): Promise<ExportKatalonResponse> {
+  const res = await fetch(`${API_BASE}/api/export/katalon`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as Partial<ExportKatalonResponse> & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data as ExportKatalonResponse;
 }
 
 /**

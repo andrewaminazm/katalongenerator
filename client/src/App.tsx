@@ -13,6 +13,7 @@ import {
   type CsvTestCaseRow,
   cancelRecordingOnServer,
   recordTestFlow,
+  exportToKatalonProject,
   type HistoryEntry,
   type LintIssue,
   type LlmProvider,
@@ -124,6 +125,7 @@ export default function App() {
   const [convertLoading, setConvertLoading] = useState(false);
   const [autoConvertBeforeGenerate, setAutoConvertBeforeGenerate] = useState(false);
   const [testCaseName, setTestCaseName] = useState("TC_Login_Smoke");
+  const [katalonProjectPath, setKatalonProjectPath] = useState("");
   const [stylePass, setStylePass] = useState<StylePass>("none");
   const [useStream, setUseStream] = useState(false);
 
@@ -134,6 +136,8 @@ export default function App() {
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [lint, setLint] = useState<LintIssue[] | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportResult, setExportResult] = useState<{ ok: boolean; message: string; path?: string } | null>(null);
   const [dark, setDark] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -396,6 +400,45 @@ export default function App() {
   const onCopy = async () => {
     if (!output) return;
     await navigator.clipboard.writeText(output);
+  };
+
+  const handleExportToKatalon = async () => {
+    setExportResult(null);
+    setError(null);
+    if (!output.trim()) {
+      setError("Generate a script first.");
+      return;
+    }
+    if (!katalonProjectPath.trim()) {
+      setError("Enter a local Katalon project path.");
+      return;
+    }
+    if (!testCaseName.trim()) {
+      setError("Enter a test case name.");
+      return;
+    }
+    setExportLoading(true);
+    try {
+      const r = await exportToKatalonProject({
+        projectPath: katalonProjectPath.trim(),
+        testCaseName: testCaseName.trim(),
+        script: output,
+        createTcFile: true,
+      });
+      setExportResult({
+        ok: true,
+        message:
+          "Test Case created successfully. In Katalon Studio: right-click the project → Refresh, or restart Studio if it still appears empty.",
+        path: r.path,
+      });
+    } catch (err) {
+      setExportResult({
+        ok: false,
+        message: err instanceof Error ? err.message : "Export failed",
+      });
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const onDownload = () => {
@@ -904,9 +947,26 @@ export default function App() {
             </div>
 
             <div>
-              <label className="field-label" htmlFor="stylePass">
-                Format / style pass
+              <label className="field-label" htmlFor="katalonProjectPath">
+                Katalon project path (for export)
               </label>
+              <input
+                id="katalonProjectPath"
+                className="input"
+                value={katalonProjectPath}
+                onChange={(e) => setKatalonProjectPath(e.target.value)}
+                placeholder="C:/Users/Admin/Katalon Studio/projectName"
+              />
+              <FieldClearBelow onClear={() => setKatalonProjectPath("")} disabled={!katalonProjectPath.trim()} />
+              <p className="hint" style={{ marginTop: "0.4rem" }}>
+                Must be a local Katalon project folder that contains <code>Test Cases</code>.
+              </p>
+            </div>
+
+             <div>
+               <label className="field-label" htmlFor="stylePass">
+                 Format / style pass
+               </label>
               <select
                 id="stylePass"
                 className="input"
@@ -1183,6 +1243,15 @@ export default function App() {
             </button>
             <button
               type="button"
+              className="btn btn-primary btn-small"
+              onClick={handleExportToKatalon}
+              disabled={!output.trim() || exportLoading}
+              title="Create a Test Case in your local Katalon project"
+            >
+              {exportLoading ? "Adding…" : "Add to Katalon Project"}
+            </button>
+            <button
+              type="button"
               className="btn btn-ghost btn-small"
               onClick={onDownload}
               disabled={!output}
@@ -1190,6 +1259,26 @@ export default function App() {
               Download .groovy
             </button>
           </div>
+          {exportResult && (
+            <div className={`status-banner ${exportResult.ok ? "ok" : "error"}`}>
+              <strong>{exportResult.ok ? "✔" : "✖"} </strong>
+              {exportResult.message}
+              {exportResult.path ? (
+                <>
+                  {" "}
+                  —{" "}
+                  <button
+                    type="button"
+                    className="linklike"
+                    onClick={() => navigator.clipboard.writeText(exportResult.path!)}
+                    title="Copy path"
+                  >
+                    {exportResult.path}
+                  </button>
+                </>
+              ) : null}
+            </div>
+          )}
           <pre className="code-pre" aria-live="polite">
             {output || (loading ? "…" : "// Generated Groovy appears here")}
           </pre>
