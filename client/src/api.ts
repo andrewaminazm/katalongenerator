@@ -148,6 +148,21 @@ export interface MobileLocatorItem {
   confidence: "high" | "medium" | "low";
 }
 
+export async function mobilePingAppium(appiumUrl: string): Promise<
+  | { ok: true; statusPath: string; ready?: boolean; version?: string }
+  | { ok: false; error: string }
+> {
+  const q = new URLSearchParams({ url: appiumUrl.trim() });
+  const res = await fetch(`${API_BASE}/api/mobile/appium/ping?${q}`);
+  const data = (await res.json().catch(() => ({}))) as
+    | { ok: true; statusPath: string; ready?: boolean; version?: string }
+    | { ok: false; error?: string };
+  if (!res.ok) {
+    return { ok: false, error: (data as { error?: string }).error || res.statusText };
+  }
+  return data as { ok: true; statusPath: string; ready?: boolean; version?: string } | { ok: false; error: string };
+}
+
 export async function mobileStartSession(params: {
   appiumUrl: string;
   capabilities: Record<string, unknown>;

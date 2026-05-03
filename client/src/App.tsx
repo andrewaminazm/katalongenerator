@@ -14,6 +14,7 @@ import {
   cancelRecordingOnServer,
   recordTestFlow,
   exportToKatalonProject,
+  mobilePingAppium,
   mobileStartSession,
   mobileStopSession,
   mobileExtractLocators,
@@ -163,6 +164,8 @@ export default function App() {
     )
   );
   const [mobileSessionId, setMobileSessionId] = useState<string | null>(null);
+  /** Base URL used when the session was created — never the recording proxy (fixes Extract locators / Stop). */
+  const [mobileSessionAppiumUrl, setMobileSessionAppiumUrl] = useState<string | null>(null);
   const [mobilePlatform, setMobilePlatform] = useState<string | null>(null);
   const [mobileStatus, setMobileStatus] = useState<string | null>(null);
   const [mobileLoading, setMobileLoading] = useState(false);
@@ -478,14 +481,37 @@ export default function App() {
     URL.revokeObjectURL(a.href);
   };
 
+  const onMobilePingAppium = async () => {
+    setError(null);
+    setMobileStatus(null);
+    setMobileLoading(true);
+    try {
+      const r = await mobilePingAppium(appiumUrl.trim());
+      if (r.ok) {
+        const extra = [r.version ? r.version : null].filter(Boolean).join("");
+        setMobileStatus(
+          `Appium is reachable (${r.statusPath}${extra ? `, ${extra}` : ""}). You can start a session.`
+        );
+      } else {
+        setError(r.error);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ping failed");
+    } finally {
+      setMobileLoading(false);
+    }
+  };
+
   const onMobileStart = async () => {
     setError(null);
     setMobileStatus(null);
     setMobileLoading(true);
     try {
       const caps = JSON.parse(appiumCapsText) as Record<string, unknown>;
-      const r = await mobileStartSession({ appiumUrl: appiumUrl.trim(), capabilities: caps });
+      const base = appiumUrl.trim();
+      const r = await mobileStartSession({ appiumUrl: base, capabilities: caps });
       setMobileSessionId(r.sessionId);
+      setMobileSessionAppiumUrl(base);
       setMobilePlatform(r.platformName);
       setMobileStatus(`Session started: ${r.platformName} (${r.sessionId})`);
     } catch (err) {
@@ -504,7 +530,8 @@ export default function App() {
     }
     setMobileLoading(true);
     try {
-      const r = await mobileExtractLocators({ appiumUrl: appiumUrl.trim(), sessionId: mobileSessionId });
+      const baseForSession = mobileSessionAppiumUrl ?? appiumUrl.trim();
+      const r = await mobileExtractLocators({ appiumUrl: baseForSession, sessionId: mobileSessionId });
       setMobilePlatform(r.platform);
       const lines = r.locators.map((l) => `${l.name} = ${l.selector}`).join("\n");
       setLocators((prev) => mergeLocatorBlock(prev, lines));
@@ -522,9 +549,11 @@ export default function App() {
     if (!mobileSessionId) return;
     setMobileLoading(true);
     try {
-      await mobileStopSession({ appiumUrl: appiumUrl.trim(), sessionId: mobileSessionId });
+      const baseForSession = mobileSessionAppiumUrl ?? appiumUrl.trim();
+      await mobileStopSession({ appiumUrl: baseForSession, sessionId: mobileSessionId });
       setMobileStatus("Session stopped.");
       setMobileSessionId(null);
+      setMobileSessionAppiumUrl(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not stop Appium session");
     } finally {
@@ -1093,12 +1122,14 @@ export default function App() {
               <div className="mobile-panel">
                 <h3 style={{ margin: "0 0 0.25rem" }}>Mobile (Appium)</h3>
                 <p className="hint" style={{ marginBottom: "0.5rem" }}>
-                  Start an Appium session, then extract locators from the current screen and merge them into the{" "}
-                  <strong>Locators</strong> box.
+                  <strong>Appium must be running</strong> locally (default <code>http://127.0.0.1:4723</code>) before
+                  you use Start session or recording. Use <strong>Extract locators</strong> to pull elements from the
+                  current emulator screen into the <strong>Locators</strong> box below (or use{" "}
+                  <strong>Appium Inspector</strong> separately for a visual tree).
                 </p>
                 <div>
                   <label className="field-label" htmlFor="appiumUrl">
-                    Appium server URL
+                    Appium server URL (keep this as your real server, usually port 4723)
                   </label>
                   <input
                     id="appiumUrl"
@@ -1122,6 +1153,9 @@ export default function App() {
                   />
                 </div>
                 <div className="row-actions" style={{ marginTop: "0.5rem" }}>
+                  <button type="button" className="btn btn-ghost" onClick={onMobilePingAppium} disabled={mobileLoading}>
+                    Check Appium
+                  </button>
                   <button type="button" className="btn btn-primary" onClick={onMobileStart} disabled={mobileLoading}>
                     {mobileLoading ? "Working…" : "Start session"}
                   </button>
@@ -1174,7 +1208,9 @@ export default function App() {
                 </div>
                 {mobileRecordProxyUrl && (
                   <p className="hint" style={{ marginTop: "0.35rem" }}>
-                    Proxy URL: <code>{mobileRecordProxyUrl}</code> (set this as your Appium server URL while recording)
+                    Recording proxy (use <strong>only</strong> in Appium Inspector / another client):{" "}
+                    <code>{mobileRecordProxyUrl}</code>. Do <strong>not</strong> replace the Appium server URL field
+                    above — Extract locators and Stop session must keep using <code>http://127.0.0.1:4723</code>.
                   </p>
                 )}
                 {mobileStatus && <p className="status-msg" style={{ marginTop: "0.35rem" }}>{mobileStatus}</p>}

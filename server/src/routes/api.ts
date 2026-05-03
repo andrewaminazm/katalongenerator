@@ -69,6 +69,8 @@ import {
   runLocatorHealing,
 } from "../services/healing/index.js";
 import {
+  AppiumConnectionError,
+  pingAppiumServer,
   startAppiumSession,
   stopAppiumSession,
   getAppiumPageSource,
@@ -293,6 +295,25 @@ function rmFileIfExists(p: string): void {
   }
 }
 
+/** Maps Appium connectivity failures to 503; session rejected by Appium to 400. */
+function respondMobileAppiumError(
+  res: express.Response,
+  e: unknown,
+  opts?: { sessionStart?: boolean }
+): boolean {
+  if (e instanceof AppiumConnectionError) {
+    res.status(503).json({ error: e.message, code: "APPIUM_UNREACHABLE" });
+    return true;
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  if (opts?.sessionStart && msg.startsWith("Could not start Appium session")) {
+    res.status(400).json({ error: msg, code: "APPIUM_SESSION_REJECTED" });
+    return true;
+  }
+  res.status(500).json({ error: msg });
+  return true;
+}
+
 let activeMobileRecording: AppiumProxyRecording | null = null;
 
 export function createApiRouter(): express.Router {
@@ -310,6 +331,22 @@ export function createApiRouter(): express.Router {
     });
   });
 
+  /** GET ?url= — check Appium /status without creating a session (always 200 + JSON). */
+  router.get("/mobile/appium/ping", async (req, res) => {
+    try {
+      const appiumUrl = String(req.query.url ?? "").trim();
+      if (!appiumUrl) {
+        res.status(400).json({ ok: false, error: "Query parameter url is required" });
+        return;
+      }
+      const result = await pingAppiumServer(appiumUrl);
+      res.json(result);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
   router.post("/mobile/session/start", async (req, res) => {
     try {
       const appiumUrl = String(req.body?.appiumUrl ?? "").trim();
@@ -318,8 +355,8 @@ export function createApiRouter(): express.Router {
         res.status(400).json({ error: "appiumUrl is required" });
         return;
       }
-      if (!capabilities || typeof capabilities !== "object") {
-        res.status(400).json({ error: "capabilities must be a JSON object" });
+      if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+        res.status(400).json({ error: "capabilities must be a JSON object (not an array)" });
         return;
       }
       const r = await startAppiumSession({
@@ -335,8 +372,7 @@ export function createApiRouter(): express.Router {
         capabilities: r.capabilities,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      res.status(500).json({ error: msg });
+      respondMobileAppiumError(res, e, { sessionStart: true });
     }
   });
 
@@ -351,8 +387,7 @@ export function createApiRouter(): express.Router {
       await stopAppiumSession({ appiumUrl, sessionId });
       res.json({ ok: true });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      res.status(500).json({ error: msg });
+      respondMobileAppiumError(res, e);
     }
   });
 
@@ -365,7 +400,17 @@ export function createApiRouter(): express.Router {
         return;
       }
       const src = await getAppiumPageSource({ appiumUrl, sessionId });
-      const parsed = parseMobilePageSource(src);
+      let parsed: ReturnType<typeof parseMobilePageSource>;
+      try {
+        parsed = parseMobilePageSource(src);
+      } catch (parseErr) {
+        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+        res.status(422).json({
+          error: `Could not parse Appium page source as XML: ${msg}`,
+          code: "PAGE_SOURCE_PARSE_FAILED",
+        });
+        return;
+      }
       const locs = extractMobileLocatorLines(parsed.nodes);
       const session = await getAppiumSession({ appiumUrl, sessionId }).catch(() => ({}));
       res.json({
@@ -374,8 +419,7 @@ export function createApiRouter(): express.Router {
         locators: locs,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      res.status(500).json({ error: msg });
+      respondMobileAppiumError(res, e);
     }
   });
 
