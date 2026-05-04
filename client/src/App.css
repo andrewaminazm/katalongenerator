@@ -16,8 +16,10 @@
 
 .app-header h1 {
   margin: 0;
-  font-size: 1.15rem;
+  font-family: var(--font-heading);
+  font-size: var(--text-medium);
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .header-meta {
@@ -25,7 +27,8 @@
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   color: var(--muted);
 }
 
@@ -73,7 +76,8 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: auto;
-  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   max-height: 280px;
 }
 
@@ -100,8 +104,8 @@
 }
 
 .loc-convert-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.72rem;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
   word-break: break-word;
 }
 
@@ -142,6 +146,8 @@
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
   font-weight: 500;
 }
 
@@ -159,10 +165,11 @@
 
 label.field-label {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--muted);
   margin-bottom: 0.35rem;
 }
@@ -181,8 +188,8 @@ select.input {
 textarea.input {
   min-height: 140px;
   resize: vertical;
-  font-family: ui-monospace, "Cascadia Code", monospace;
-  font-size: 0.85rem;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
 }
 
 /* LTR so "name = selector" stays readable with Arabic in labels or xpath (no RTL jumbling) */
@@ -215,8 +222,8 @@ textarea.input.record-flow-textarea {
 
 textarea.input.jira-steps-textarea {
   min-height: 12rem;
-  font-family: ui-monospace, "Cascadia Code", monospace;
-  font-size: 0.88rem;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
   white-space: pre-wrap;
 }
 
@@ -241,8 +248,9 @@ textarea.input.jira-steps-textarea {
   border-radius: 8px;
   border: none;
   cursor: pointer;
+  font-family: var(--font-body);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--text-body);
 }
 
 .btn-primary {
@@ -315,7 +323,8 @@ label.btn {
 }
 
 .hint {
-  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   color: var(--muted);
   margin: 0;
 }
@@ -334,7 +343,8 @@ label.btn {
 }
 
 .katalon-import-feedback {
-  font-size: 0.85rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   margin: 0.5rem 0 0;
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
@@ -365,7 +375,8 @@ label.btn {
 }
 
 .katalon-loaded-summary {
-  font-size: 0.85rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   font-weight: 600;
   color: var(--accent);
   margin: 0;
@@ -392,9 +403,9 @@ label.btn {
   border-radius: 8px;
   background: var(--code-bg);
   color: var(--code-fg);
-  font-family: ui-monospace, "Cascadia Code", monospace;
-  font-size: 0.8rem;
-  line-height: 1.45;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  line-height: 1.6;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -402,7 +413,8 @@ label.btn {
 }
 
 .status-msg {
-  font-size: 0.85rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   color: var(--muted);
 }
 
@@ -416,7 +428,8 @@ label.btn {
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg);
-  font-size: 0.85rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   line-height: 1.35;
 }
 
@@ -463,7 +476,8 @@ label.btn {
 
 .history h2 {
   margin: 0 0 0.5rem;
-  font-size: 0.85rem;
+  font-family: var(--font-heading);
+  font-size: var(--text-body);
   font-weight: 600;
 }
 
@@ -481,7 +495,8 @@ label.btn {
   border: 1px solid var(--border);
   margin-bottom: 0.35rem;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   background: var(--surface);
 }
 
@@ -508,7 +523,8 @@ label.btn {
   border-radius: 8px;
   padding: 0.35rem 0.65rem;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
 }
 
 .lint-panel {
@@ -517,14 +533,17 @@ label.btn {
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg);
-  font-size: 0.8rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
   max-height: 180px;
   overflow: auto;
 }
 
 .lint-panel h3 {
   margin: 0 0 0.4rem;
-  font-size: 0.85rem;
+  font-family: var(--font-heading);
+  font-size: var(--text-body);
+  font-weight: 600;
 }
 
 .lint-item {
@@ -546,7 +565,8 @@ label.btn {
 }
 
 .or-match-preview {
-  font-size: 0.78rem;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
   color: var(--muted);
   max-height: 120px;
   overflow: auto;
@@ -574,7 +594,8 @@ label.btn {
 .csv-test-case-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.78rem;
+  font-family: var(--font-body);
+  font-size: var(--text-small);
 }
 
 .csv-test-case-table th,
@@ -604,7 +625,8 @@ label.btn {
 
 .csv-tc-id {
   white-space: nowrap;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-code);
+  font-size: var(--text-code);
 }
 
 .csv-tc-title {

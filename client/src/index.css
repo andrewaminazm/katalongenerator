@@ -9,6 +9,18 @@
   --danger: #b42318;
   --code-bg: #1e1e1e;
   --code-fg: #d4d4d4;
+
+  /* Typography */
+  --font-heading: "Poppins", system-ui, sans-serif;
+  --font-body:    "Roboto", system-ui, sans-serif;
+  --font-code:    "Source Code Pro", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+
+  /* Size scale */
+  --text-large:  1.5rem;   /* 24px — page/section titles */
+  --text-medium: 1.125rem; /* 18px — card titles, headers */
+  --text-body:   0.9375rem;/* 15px — body content */
+  --text-small:  0.8125rem;/* 13px — helper text, labels */
+  --text-code:   0.8125rem;/* 13px — code/technical */
 }
 
 [data-theme="dark"] {
@@ -36,7 +48,8 @@ body,
 
 body {
   margin: 0;
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
