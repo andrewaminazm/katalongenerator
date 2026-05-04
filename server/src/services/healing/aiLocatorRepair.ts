@@ -1,8 +1,8 @@
-import { generateWithOllama } from "../ollama.js";
+import { gosiBrainGenerate } from "../gosiBrain.js";
 import { scoreHealingCandidate } from "./healingScorer.js";
 import type { FallbackLocator, LocatorRef } from "./types.js";
 
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+const DEFAULT_MODEL = process.env.GOSI_BRAIN_MODEL || "qwen3-vl-30b-a3b-instruct-fp8";
 
 function extractJsonArray(text: string): unknown {
   const t = text.trim();
@@ -18,7 +18,7 @@ function extractJsonArray(text: string): unknown {
 }
 
 /**
- * Last-resort: ask Ollama for exactly 3 locator objects. Parsed and re-scored for ordering.
+ * Last-resort: ask Gosi Brain for exactly 3 locator objects. Parsed and re-scored for ordering.
  */
 export async function repairLocatorsWithOllama(options: {
   url: string;
@@ -26,9 +26,18 @@ export async function repairLocatorsWithOllama(options: {
   failedLocator: LocatorRef;
   domSnapshot?: string;
   model?: string;
+  authorizationToken?: string;
 }): Promise<FallbackLocator[]> {
   const model = options.model?.trim() || DEFAULT_MODEL;
   const snap = (options.domSnapshot ?? "").slice(0, 12_000);
+  const token =
+    options.authorizationToken?.trim() ||
+    process.env.GOSI_BRAIN_AUTHORIZATION_TOKEN?.trim() ||
+    "";
+
+  if (!token) {
+    return [];
+  }
 
   const prompt = `You are a test automation locator expert.
 
@@ -53,7 +62,7 @@ Rules:
 - For name use the attribute value only if type is name (generator will wrap as [name="..."] where needed)
 - Prioritize stability over length.`;
 
-  const { response } = await generateWithOllama({ model, prompt, stream: false });
+  const { response } = await gosiBrainGenerate({ model, prompt, authorizationToken: token });
   const parsed = extractJsonArray(response);
   if (!Array.isArray(parsed)) {
     return [];

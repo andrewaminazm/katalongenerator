@@ -19,8 +19,7 @@ import {
   takeRecordingResult,
 } from "../services/playwrightRecorder.js";
 import { runPlaywrightRecordingPipeline } from "../services/recordingIntelligence/universalRecordingPipeline.js";
-import { generateWithOllama, streamOllama } from "../services/ollama.js";
-import { generateWithGemini, streamGemini } from "../services/gemini.js";
+import { gosiBrainGenerate, GosiBrainAuthError, streamGosiBrain } from "../services/gosiBrain.js";
 import {
   parseTestStepsCsv,
   parsedStepsToStrings,
@@ -28,6 +27,7 @@ import {
 } from "../services/csvParser.js";
 import {
   getJiraIssue,
+  getJiraMyself,
   getMockJiraIssue,
   JiraApiError,
 } from "../services/jira.js";
@@ -106,13 +106,18 @@ const uploadKatalon = multer({
   limits: { fileSize: 25 * 1024 * 1024, files: 6000 },
 });
 
-const DEFAULT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const DEFAULT_GOSI_BRAIN_MODEL =
+  process.env.GOSI_BRAIN_MODEL || "qwen3-vl-30b-a3b-instruct-fp8";
 
-function resolveLlm(body: GenerateRequestBody): LlmProvider {
-  const v = body.llm;
-  if (v === "gemini" || v === "ollama") return v;
-  return "ollama";
+function resolveLlm(_body: GenerateRequestBody): LlmProvider {
+  return "gosi-brain";
+}
+
+function resolveGosiAuthorizationToken(body: GenerateRequestBody): string | null {
+  const fromBody = body.authorization_token?.trim();
+  if (fromBody) return fromBody;
+  const fromEnv = process.env.GOSI_BRAIN_AUTHORIZATION_TOKEN?.trim();
+  return fromEnv || null;
 }
 
 function normalizeSteps(body: GenerateRequestBody): string[] {
@@ -320,14 +325,13 @@ export function createApiRouter(): express.Router {
   const router = express.Router();
 
   router.get("/health", (_req, res) => {
-    const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-    const geminiConfigured = Boolean(process.env.GEMINI_API_KEY?.trim());
+    const gosiBrainConfigured = Boolean(
+      process.env.GOSI_BRAIN_CHAT_URL?.trim() && process.env.GOSI_BRAIN_API_KEY?.trim()
+    );
     res.json({
       ok: true,
-      ollamaBase,
-      defaultModel: DEFAULT_OLLAMA_MODEL,
-      geminiConfigured,
-      defaultGeminiModel: DEFAULT_GEMINI_MODEL,
+      gosiBrainConfigured,
+      defaultGosiBrainModel: DEFAULT_GOSI_BRAIN_MODEL,
     });
   });
 
@@ -625,14 +629,24 @@ export function createApiRouter(): express.Router {
         typeof req.body?.maxRetries === "number" && req.body.maxRetries > 0
           ? req.body.maxRetries
           : undefined;
+      const rawBody = req.body as Record<string, unknown>;
+      const authorizationToken =
+        typeof rawBody.authorization_token === "string" && rawBody.authorization_token.trim()
+          ? rawBody.authorization_token.trim()
+          : (process.env.GOSI_BRAIN_AUTHORIZATION_TOKEN?.trim() ?? undefined);
       const result = await runLocatorHealing({
         url,
         failure,
         maxRetries,
         skipAi: Boolean(req.body?.skipAi),
+        authorizationToken,
       });
       res.json(result);
     } catch (e) {
+      if (e instanceof GosiBrainAuthError) {
+        res.status(401).json({ error: e.message, code: e.code });
+        return;
+      }
       next(e);
     }
   });
@@ -944,18 +958,24 @@ export function createApiRouter(): express.Router {
       }
 
       const llm = resolveLlm(body);
-      const geminiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
-      if (llm === "gemini" && !geminiKey) {
+
+      const gosiChatUrl = process.env.GOSI_BRAIN_CHAT_URL?.trim() ?? "";
+      const gosiApiKey = process.env.GOSI_BRAIN_API_KEY?.trim() ?? "";
+      if (!gosiChatUrl || !gosiApiKey) {
         res.status(503).json({
           error:
-            'Gemini is selected but the server has no GEMINI_API_KEY. Add it to server/.env (or root .env), restart the backend, and try again. Keys are not accepted from the browser.',
+            "Server is missing GOSI_BRAIN_CHAT_URL or GOSI_BRAIN_API_KEY. Add them to server/.env and restart the backend.",
         });
         return;
       }
 
-      const model =
-        body.model?.trim() ||
-        (llm === "gemini" ? DEFAULT_GEMINI_MODEL : DEFAULT_OLLAMA_MODEL);
+      const gosiToken = resolveGosiAuthorizationToken(body);
+      if (!gosiToken) {
+        res.status(401).json({ error: "authorization_token is required for Gosi Brain." });
+        return;
+      }
+
+      const model = body.model?.trim() || DEFAULT_GOSI_BRAIN_MODEL;
       const prompt = buildKatalonPrompt({
         platform,
         steps,
@@ -968,13 +988,19 @@ export function createApiRouter(): express.Router {
       });
 
       if (body.stream) {
+        // Gosi Brain does not emit Ollama-format newline-delimited JSON chunks.
+        // streamGosiBrain internally calls non-streaming and yields the full
+        // response as a single chunk, so the SSE/stream path still works for
+        // clients that use stream:true — they just get one large write instead
+        // of incremental tokens.
         let headersSent = false;
         let full = "";
         try {
-          const stream =
-            llm === "gemini"
-              ? streamGemini({ model, prompt, apiKey: geminiKey })
-              : streamOllama({ model, prompt });
+          const stream = streamGosiBrain({
+            prompt,
+            model,
+            authorizationToken: gosiToken,
+          });
           for await (const chunk of stream) {
             full += chunk;
           }
@@ -1004,11 +1030,17 @@ export function createApiRouter(): express.Router {
               code: out,
             });
           } else {
-            res.status(502).json({
-              error: llm === "gemini" ? "Gemini returned an empty stream" : "Ollama returned an empty stream",
-            });
+            res.status(502).json({ error: "Gosi Brain returned an empty response." });
           }
         } catch (e) {
+          if (e instanceof GosiBrainAuthError) {
+            if (!headersSent) {
+              res.status(401).json({ error: e.message, code: e.code });
+            } else {
+              res.end();
+            }
+            return;
+          }
           const msg = e instanceof Error ? e.message : String(e);
           if (!headersSent) {
             res.status(502).json({ error: msg });
@@ -1020,10 +1052,11 @@ export function createApiRouter(): express.Router {
         return;
       }
 
-      const result =
-        llm === "gemini"
-          ? await generateWithGemini({ model, prompt, apiKey: geminiKey })
-          : await generateWithOllama({ model, prompt });
+      const result = await gosiBrainGenerate({
+        prompt,
+        model,
+        authorizationToken: gosiToken,
+      });
       let code = result.response.trim();
       if (platform === "web") {
         code = normalizeKatalonWebGroovy(code);
@@ -1075,21 +1108,14 @@ export function createApiRouter(): express.Router {
         ...healingPayload(body),
       });
     } catch (e) {
+      if (e instanceof GosiBrainAuthError) {
+        res.status(401).json({ error: e.message, code: e.code });
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
       if (/fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(msg)) {
-        const ollamaBase =
-          process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:11434";
-        const body = req.body as GenerateRequestBody;
-        const errLlm = resolveLlm(body);
-        const errModel =
-          body.model?.trim() ||
-          (errLlm === "gemini" ? DEFAULT_GEMINI_MODEL : DEFAULT_OLLAMA_MODEL);
-        const modelHint =
-          errLlm === "gemini"
-            ? "Gemini: set GEMINI_API_KEY in server/.env and restart the backend."
-            : `Ollama: run \`ollama serve\`, pull the model (\`ollama pull ${errModel}\`), and set OLLAMA_BASE_URL in server/.env (use http://127.0.0.1:11434 on Windows if you see fetch failed).`;
         res.status(503).json({
-          error: `LLM backend unreachable (${msg}). ${modelHint} This server uses OLLAMA_BASE_URL=${ollamaBase}. Quick check: open ${ollamaBase}/api/tags in a browser.`,
+          error: `Gosi Brain unreachable (${msg}). Check GOSI_BRAIN_CHAT_URL in server/.env and make sure the server can reach the IWAI gateway.`,
         });
         return;
       }
@@ -1240,6 +1266,32 @@ export function createApiRouter(): express.Router {
       const parsed = parseTestStepsCsv(text);
       const steps = parsedStepsToStrings(parsed);
       res.json({ format: "simple" as const, steps, rowCount: parsed.length });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  /** POST { credentials: { baseUrl, email, apiToken } } — calls Jira GET /myself to verify auth. */
+  router.post("/jira/whoami", async (req, res, next) => {
+    try {
+      const c = (req.body as { credentials?: { baseUrl?: string; email?: string; apiToken?: string } })?.credentials;
+      const baseUrl = typeof c?.baseUrl === "string" ? c.baseUrl.trim() : "";
+      const email = typeof c?.email === "string" ? c.email.trim() : "";
+      const apiToken = typeof c?.apiToken === "string" ? c.apiToken.trim() : "";
+      if (!baseUrl || !email || !apiToken) {
+        res.status(400).json({ error: "Provide credentials.baseUrl, credentials.email, and credentials.apiToken." });
+        return;
+      }
+      try {
+        const me = await getJiraMyself({ baseUrl, email, apiToken });
+        res.json(me);
+      } catch (e) {
+        if (e instanceof JiraApiError) {
+          res.status(e.statusCode).json({ error: e.message });
+          return;
+        }
+        throw e;
+      }
     } catch (e) {
       next(e);
     }

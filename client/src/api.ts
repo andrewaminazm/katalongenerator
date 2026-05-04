@@ -2,7 +2,7 @@ const API_BASE = "";
 
 export type Platform = "web" | "mobile";
 
-export type LlmProvider = "ollama" | "gemini";
+export type LlmProvider = "gosi-brain";
 
 export type TestTemplate = "default" | "smoke" | "regression" | "api-mix" | "data-driven";
 
@@ -60,6 +60,8 @@ export interface GeneratePayload {
   steps: string[];
   locators?: string;
   llm?: LlmProvider;
+  /** Bearer token for Gosi Brain — WebView passes via URL → localStorage → optional override here. */
+  authorization_token?: string;
   model?: string;
   stream?: boolean;
   testCaseName?: string;
@@ -387,6 +389,10 @@ export async function generateCode(
   }
   if (!res.ok) {
     const raw = await res.text().catch(() => "");
+    if (res.status === 401) {
+      const msg = (() => { try { return (JSON.parse(raw) as { error?: string }).error; } catch { return undefined; } })();
+      throw new Error(msg || "Unauthorized: Gosi Brain token missing or expired. Close and re-open this screen to refresh it.");
+    }
     const apiMsg = formatGenerateErrorBody(raw);
     throw new Error(apiMsg || raw.slice(0, 300) || res.statusText);
   }
@@ -412,6 +418,10 @@ export async function generateCodeStream(
   }
   if (!res.ok || !res.body) {
     const raw = await res.text().catch(() => "");
+    if (res.status === 401) {
+      const msg = (() => { try { return (JSON.parse(raw) as { error?: string }).error; } catch { return undefined; } })();
+      throw new Error(msg || "Unauthorized: Gosi Brain token missing or expired. Close and re-open this screen to refresh it.");
+    }
     const apiMsg = formatGenerateErrorBody(raw);
     throw new Error(apiMsg || raw.slice(0, 300) || res.statusText);
   }
@@ -613,6 +623,33 @@ export async function fetchJiraIssue(
   return data as JiraIssueResponse;
 }
 
+/** Calls Jira GET /myself — if this works but fetch issue returns 403, you lack permission on that issue/project. */
+export async function fetchJiraWhoami(credentials: JiraCredentialsPayload): Promise<{
+  displayName: string;
+  emailAddress?: string;
+  accountId?: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/jira/whoami`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credentials }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    displayName?: string;
+    emailAddress?: string;
+    accountId?: string;
+    error?: string;
+  };
+  if (!res.ok) {
+    throw new Error(data.error || res.statusText);
+  }
+  return {
+    displayName: data.displayName ?? "(unknown)",
+    emailAddress: data.emailAddress,
+    accountId: data.accountId,
+  };
+}
+
 export interface HistoryEntry {
   id: string;
   createdAt: string;
@@ -671,10 +708,8 @@ export async function convertLocatorsApi(payload: {
 
 export async function healthCheck(): Promise<{
   ok: boolean;
-  ollamaBase: string;
-  defaultModel: string;
-  geminiConfigured?: boolean;
-  defaultGeminiModel?: string;
+  gosiBrainConfigured?: boolean;
+  defaultGosiBrainModel?: string;
 }> {
   const res = await fetch(`${API_BASE}/api/health`);
   if (!res.ok) throw new Error("Server unreachable");

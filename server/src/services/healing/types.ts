@@ -38,6 +38,8 @@ export interface LocatorHealingRequest {
   /** Skip AI even if rules fail (debug). */
   skipAi?: boolean;
   platform?: "web" | "mobile";
+  /** Bearer token for Gosi Brain AI repair (falls back to GOSI_BRAIN_AUTHORIZATION_TOKEN env). */
+  authorizationToken?: string;
 }
 
 export interface HealingAttempt {

@@ -5,6 +5,7 @@ import {
   fetchPlaywrightLocatorsPreview,
   fetchHistory,
   fetchJiraIssue,
+  fetchJiraWhoami,
   generateCode,
   generateCodeStream,
   healthCheck,
@@ -31,18 +32,26 @@ import "./App.css";
 
 type InputTab = "manual" | "csv" | "jira" | "record";
 
-const OLLAMA_MODELS = [
-  { value: "llama3.2", label: "llama3.2 (default)" },
-  { value: "llama3", label: "llama3" },
-  { value: "codellama", label: "codellama (code)" },
-  { value: "qwen3-coder:30b", label: "qwen3-coder:30b (code)" },
-];
+/** Mobile WebView passes `?token=` once; we persist the Bearer value for /api/generate. */
+const GOSI_TOKEN_KEY = "katalon:gosi_token";
 
-const GEMINI_MODELS = [
-  { value: "gemini-2.0-flash", label: "gemini-2.0-flash (default)" },
-  { value: "gemini-2.0-flash-lite", label: "gemini-2.0-flash-lite" },
-  { value: "gemini-1.5-flash", label: "gemini-1.5-flash" },
-  { value: "gemini-1.5-pro", label: "gemini-1.5-pro" },
+/** Best-effort JWT exp check — no signature verification, browser-safe. */
+function isTokenExpired(bearer: string): boolean {
+  try {
+    const raw = bearer.replace(/^Bearer\s+/i, "").trim();
+    const parts = raw.split(".");
+    if (parts.length !== 3) return false;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = JSON.parse(atob(b64)) as { exp?: unknown };
+    if (typeof json.exp !== "number") return false;
+    return json.exp * 1000 < Date.now();
+  } catch {
+    return false;
+  }
+}
+
+const GOSI_BRAIN_MODELS = [
+  { value: "qwen3-vl-30b-a3b-instruct-fp8", label: "qwen3-vl-30b-a3b-instruct-fp8 (default)" },
 ];
 
 function splitSteps(text: string): string[] {
@@ -109,6 +118,7 @@ export default function App() {
   /** Lines from Jira (or demo); editable — this is what Generate sends to the engine. */
   const [jiraStepsText, setJiraStepsText] = useState("");
   const [jiraMeta, setJiraMeta] = useState<{ mock: boolean; summary: string } | null>(null);
+  const [jiraVerifyMsg, setJiraVerifyMsg] = useState<string | null>(null);
   const [jiraLoading, setJiraLoading] = useState(false);
 
   const [recordUrl, setRecordUrl] = useState("");
@@ -118,8 +128,8 @@ export default function App() {
   const [preserveRecordingFidelity, setPreserveRecordingFidelity] = useState(true);
 
   const [platform, setPlatform] = useState<Platform>("web");
-  const [llm, setLlm] = useState<LlmProvider>("ollama");
-  const [model, setModel] = useState("llama3.2");
+  const llm: LlmProvider = "gosi-brain";
+  const [model, setModel] = useState("qwen3-vl-30b-a3b-instruct-fp8");
   const [locators, setLocators] = useState("");
   const [locatorUrl, setLocatorUrl] = useState("");
   const [pageLocale, setPageLocale] = useState<PlaywrightPageLocale>("auto");
@@ -139,6 +149,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<string | null>(null);
+  const [gosiToken, setGosiToken] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem(GOSI_TOKEN_KEY) ?? "" : ""
+  );
+  const [gosiTokenNotice, setGosiTokenNotice] = useState<string | null>(null);
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [lint, setLint] = useState<LintIssue[] | null>(null);
@@ -195,23 +209,38 @@ export default function App() {
   useEffect(() => {
     healthCheck()
       .then((h) => {
-        const gem =
-          h.geminiConfigured === true
-            ? "Gemini key: configured"
-            : "Gemini key: not set (GEMINI_API_KEY on server)";
-        setHealth(`${h.ollamaBase} · Ollama default ${h.defaultModel} · ${gem}`);
+        const gosi =
+          h.gosiBrainConfigured === true
+            ? "Gosi Brain: configured"
+            : "Gosi Brain: not configured (set GOSI_BRAIN_CHAT_URL and GOSI_BRAIN_API_KEY on server)";
+        setHealth(gosi);
       })
       .catch(() => setHealth("API unreachable — start the backend"));
     loadHistory();
   }, [loadHistory]);
 
   useEffect(() => {
-    if (llm === "ollama") {
-      setModel((m) => (OLLAMA_MODELS.some((x) => x.value === m) ? m : "llama3.2"));
-    } else {
-      setModel((m) => (GEMINI_MODELS.some((x) => x.value === m) ? m : "gemini-2.0-flash"));
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get("token");
+    if (urlToken?.trim()) {
+      const raw = urlToken.trim();
+      const bearer = raw.startsWith("Bearer ") ? raw : `Bearer ${raw}`;
+      localStorage.setItem(GOSI_TOKEN_KEY, bearer);
+      setGosiToken(bearer);
+      params.delete("token");
+      const newSearch = params.toString();
+      const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
+      window.history.replaceState({}, "", newUrl);
+      setGosiTokenNotice("Gosi Brain token configured");
     }
-  }, [llm]);
+  }, []);
+
+  useEffect(() => {
+    if (!gosiTokenNotice) return;
+    const t = window.setTimeout(() => setGosiTokenNotice(null), 5000);
+    return () => window.clearTimeout(t);
+  }, [gosiTokenNotice]);
+
 
   const effectiveSteps = useMemo(() => {
     if (tab === "manual") return splitSteps(manualSteps);
@@ -300,8 +329,33 @@ export default function App() {
     }
   };
 
+  const onJiraTestLogin = async () => {
+    setError(null);
+    setJiraVerifyMsg(null);
+    const b = jiraBaseUrl.trim();
+    const e = jiraEmail.trim();
+    const t = jiraApiToken.trim();
+    if (!b || !e || !t) {
+      setError("Fill Jira URL, email, and API token to test login.");
+      return;
+    }
+    setJiraLoading(true);
+    try {
+      const r = await fetchJiraWhoami({ baseUrl: b, email: e, apiToken: t });
+      setJiraVerifyMsg(
+        `Login OK — Jira recognizes you as "${r.displayName}"${r.emailAddress ? ` (${r.emailAddress})` : ""}. If Fetch from Jira still returns 403, your account likely cannot browse that issue’s project (permission), not a bad token.`
+      );
+    } catch (err) {
+      setJiraVerifyMsg(null);
+      setError(err instanceof Error ? err.message : "Login test failed");
+    } finally {
+      setJiraLoading(false);
+    }
+  };
+
   const onFetchJira = async () => {
     setError(null);
+    setJiraVerifyMsg(null);
     const key = jiraKey.trim();
     if (!key) {
       setError("Enter a Jira issue key.");
@@ -357,6 +411,13 @@ export default function App() {
       setError("Enter a page URL or turn off auto-detect locators.");
       return;
     }
+    const t = gosiToken.trim() || localStorage.getItem(GOSI_TOKEN_KEY)?.trim() || "";
+    // Only block if a token IS present in localStorage but it is expired.
+    // When no localStorage token exists, the server uses GOSI_BRAIN_AUTHORIZATION_TOKEN env.
+    if (t && isTokenExpired(t)) {
+      setError("Your Gosi Brain token has expired. Please re-open the app to refresh it.");
+      return;
+    }
     setLoading(true);
     setOutput("");
     setLint(null);
@@ -388,6 +449,8 @@ export default function App() {
         urlForGenerate = locatorUrl.trim();
       }
 
+      const tokenForGosi = gosiToken.trim() || localStorage.getItem(GOSI_TOKEN_KEY)?.trim() || "";
+
       const payload = {
         platform,
         steps: effectiveSteps,
@@ -400,6 +463,7 @@ export default function App() {
         url: urlForGenerate,
         pageLocale,
         stylePass,
+        ...(tokenForGosi ? { authorization_token: tokenForGosi } : {}),
         ...(tab === "record" && platform === "web"
           ? {
               mode: "record" as const,
@@ -691,10 +755,6 @@ export default function App() {
       <header className="app-header">
         <div>
           <h1>Katalon script generator</h1>
-          <p className="hint" style={{ margin: "0.25rem 0 0" }}>
-            Choose <strong>Ollama</strong> (local) or <strong>Gemini</strong> (Google). The backend calls the model;
-            Gemini uses <code>GEMINI_API_KEY</code> from server env only — never paste keys into the UI.
-          </p>
         </div>
         <div className="header-meta">
           {health && <span className="badge">{health}</span>}
@@ -881,17 +941,24 @@ export default function App() {
               </div>
               <div>
                 <label className="field-label" htmlFor="jiraToken">
-                  API token
+                  Password, PAT, or API token
                 </label>
                 <input
                   id="jiraToken"
                   className="input"
                   type="password"
-                  autoComplete="off"
-                  placeholder="Create at id.atlassian.com → API tokens"
+                  autoComplete="current-password"
+                  placeholder="On-prem: your Jira password or Personal Access Token. Cloud: Atlassian API token"
                   value={jiraApiToken}
                   onChange={(e) => setJiraApiToken(e.target.value)}
                 />
+                <p className="hint" style={{ marginTop: "0.25rem" }}>
+                  There is no separate “log in” step. <strong>Test Jira login</strong> and <strong>Fetch from Jira</strong>{" "}
+                  both use <strong>HTTP Basic</strong> auth: the same <code>username:password</code> (or{" "}
+                  <code>email:api_token</code> on Atlassian Cloud) you would use in curl. For{" "}
+                  <code>jira.gosi.ins</code> (Data Center), put your <strong>Jira password</strong> or a{" "}
+                  <strong>PAT</strong> here if your org disabled password for REST.
+                </p>
                 <FieldClearBelow onClear={() => setJiraApiToken("")} disabled={!jiraApiToken.trim()} />
               </div>
               <div className="row-2">
@@ -909,7 +976,16 @@ export default function App() {
                   />
                   <FieldClearBelow onClear={() => setJiraKey("")} disabled={!jiraKey.trim()} />
                 </div>
-                <div style={{ alignSelf: "flex-end" }}>
+                <div style={{ alignSelf: "flex-end", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={onJiraTestLogin}
+                    disabled={jiraLoading}
+                    title="Calls Jira GET /myself — verifies URL + login without loading an issue"
+                  >
+                    Test Jira login
+                  </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
@@ -920,11 +996,16 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              {jiraVerifyMsg && (
+                <p className="hint status-msg" style={{ marginTop: "0.35rem" }}>
+                  {jiraVerifyMsg}
+                </p>
+              )}
               <p className="hint">
-                Leave URL, email, and token empty to load <strong>demo</strong> steps only. Credentials are sent per
-                request and are not stored on the server. For <strong>gosi.ins</strong> and most on‑prem Jira: use your{" "}
-                <strong>Jira username</strong> (login id), not always your email, with your password or a{" "}
-                <strong>Personal Access Token</strong> from your Jira profile — not the Atlassian Cloud API token page.
+                Leave all three fields empty to load <strong>demo</strong> steps only. Nothing is stored on the server.{" "}
+                <strong>403 on Test Jira login</strong> on Data Center often means the server blocks Basic auth to REST
+                (use a <strong>PAT</strong> in the third field) or your account is not allowed to use the REST API — ask
+                the Jira admin. <strong>401</strong> means wrong username, password, or site URL.
               </p>
               {jiraMeta && (
                 <p className="hint">
@@ -1054,25 +1135,33 @@ export default function App() {
                   <option value="mobile">Mobile (Mobile)</option>
                 </select>
               </div>
-              <div>
-                <label className="field-label" htmlFor="llm">
-                  LLM provider
-                </label>
-                <select
-                  id="llm"
-                  className="input"
-                  value={llm}
-                  onChange={(e) => setLlm(e.target.value as LlmProvider)}
-                >
-                  <option value="ollama">Ollama (local)</option>
-                  <option value="gemini">Google Gemini (API)</option>
-                </select>
-              </div>
             </div>
+
+            {gosiTokenNotice && (
+              <p className="hint" style={{ marginTop: "0.35rem", color: "var(--ok, #2e7d32)" }}>
+                {gosiTokenNotice}
+              </p>
+            )}
+
+            {(() => {
+              const t = gosiToken.trim() || localStorage.getItem(GOSI_TOKEN_KEY)?.trim() || "";
+              if (!t) return null; // server will use GOSI_BRAIN_AUTHORIZATION_TOKEN env fallback
+              if (isTokenExpired(t))
+                return (
+                  <p className="hint" style={{ color: "var(--error, #c62828)" }}>
+                    Token expired — please re-open the app to get a fresh token.
+                  </p>
+                );
+              return (
+                <p className="hint" style={{ color: "var(--ok, #2e7d32)" }}>
+                  Gosi Brain token: active
+                </p>
+              );
+            })()}
 
             <div>
               <label className="field-label" htmlFor="model">
-                {llm === "ollama" ? "Ollama model" : "Gemini model"}
+                Gosi Brain model
               </label>
               <select
                 id="model"
@@ -1080,7 +1169,7 @@ export default function App() {
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
               >
-                {(llm === "ollama" ? OLLAMA_MODELS : GEMINI_MODELS).map((m) => (
+                {GOSI_BRAIN_MODELS.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>
@@ -1400,7 +1489,7 @@ export default function App() {
                 checked={useStream}
                 onChange={(e) => setUseStream(e.target.checked)}
               />
-              Stream response (live typing; {llm === "ollama" ? "Ollama" : "Gemini"} streaming API)
+              Stream response (live typing)
             </label>
 
             {error && (
@@ -1450,19 +1539,9 @@ export default function App() {
               ) : (
                 <>Steps in use: {effectiveSteps.length}.</>
               )}
-              {llm === "ollama" ? (
-                <>
-                  {" "}
-                  Ensure Ollama is running (<code>ollama serve</code>) and the model is pulled (
-                  <code>ollama pull {model}</code>).
-                </>
-              ) : (
-                <>
-                  {" "}
-                  Set <code>GEMINI_API_KEY</code> in <code>server/.env</code> (or repo root <code>.env</code>), restart
-                  the backend, and ensure the chosen model is enabled for your Google AI project.
-                </>
-              )}
+              {" "}
+              Set <code>GOSI_BRAIN_CHAT_URL</code> and <code>GOSI_BRAIN_API_KEY</code> in{" "}
+              <code>server/.env</code>, then restart the backend.
             </p>
           </div>
 

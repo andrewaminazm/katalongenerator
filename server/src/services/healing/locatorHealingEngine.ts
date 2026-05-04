@@ -173,6 +173,7 @@ export async function runLocatorHealing(req: LocatorHealingRequest): Promise<Loc
         action: failure.action,
         failedLocator: failure.failedLocator,
         domSnapshot: failure.domSnapshot,
+        authorizationToken: req.authorizationToken,
       });
     } catch (e) {
       warnings.push(`AI repair failed: ${e instanceof Error ? e.message : String(e)}`);

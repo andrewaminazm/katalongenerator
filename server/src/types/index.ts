@@ -2,7 +2,7 @@ export type Platform = "web" | "mobile";
 
 export type GenerateMode = "manual" | "record";
 
-export type LlmProvider = "ollama" | "gemini";
+export type LlmProvider = "gosi-brain";
 
 export type TestTemplate = "default" | "smoke" | "regression" | "api-mix" | "data-driven";
 
@@ -34,6 +34,11 @@ export interface GenerateRequestBody {
   locators?: string;
   /** Default `ollama` when omitted. Gemini uses `GEMINI_API_KEY` on the server only. */
   llm?: LlmProvider;
+  /**
+   * Bearer value for Gosi Brain (from WebView `?token=` or server `GOSI_BRAIN_AUTHORIZATION_TOKEN`).
+   * Send full `Authorization` value, e.g. `Bearer eyJ...`.
+   */
+  authorization_token?: string;
   model?: string;
   stream?: boolean;
   testCaseName?: string;

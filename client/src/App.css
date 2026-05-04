@@ -308,6 +308,12 @@ label.btn {
   align-items: flex-start;
 }
 
+.error-block .status-msg.error {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 100%;
+}
+
 .hint {
   font-size: 0.8rem;
   color: var(--muted);

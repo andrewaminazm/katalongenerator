@@ -5,7 +5,9 @@ import { fileURLToPath } from "url";
 import type { HistoryEntry } from "../types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, "..", "..", "data");
+const DATA_DIR = process.env.READONLY_FS
+  ? path.join("/tmp", "katalon-data")
+  : path.join(__dirname, "..", "..", "data");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
 
 const MAX_ENTRIES = 200;
