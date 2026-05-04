@@ -117,12 +117,24 @@ export function extractSteps(description: unknown): string[] {
  * Site root or single context path (e.g. https://host/jira). Strips browser paths like
  * /secure/Dashboard.jspa so REST calls hit …/rest/api/3/… correctly.
  */
+/** Trim + remove zero-width / BOM often pasted from Confluence or email. */
+export function sanitizeJiraInput(s: string): string {
+  return s
+    .replace(/^\uFEFF/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .trim();
+}
+
 export function normalizeJiraBaseUrl(baseRaw: string): string {
-  const trimmed = baseRaw.trim();
+  const trimmed = sanitizeJiraInput(baseRaw);
   if (!trimmed) {
     throw new JiraApiError("Jira base URL is required", 400);
   }
-  const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  let withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  // Jira Cloud hosts must use HTTPS; http:// often 301s and breaks Basic auth without redirects.
+  if (/^http:\/\/[^/]*\.atlassian\.net/i.test(withProto)) {
+    withProto = withProto.replace(/^http:\/\//i, "https://");
+  }
   let u: URL;
   try {
     u = new URL(withProto);
@@ -253,8 +265,14 @@ export function logJiraTlsStartupHint(): void {
 
 /**
  * GET over HTTPS using {@link getJiraHttpsAgent} so corporate CAs and insecure mode work.
+ * Follows same-host redirects (http→https, trailing slash) so Authorization is preserved on the final URL.
  */
-function jiraHttpsGet(urlStr: string, headers: Record<string, string>): Promise<{ status: number; body: string }> {
+function jiraHttpsGet(
+  urlStr: string,
+  headers: Record<string, string>,
+  redirectDepth = 0
+): Promise<{ status: number; body: string }> {
+  const maxRedirects = 5;
   const u = new URL(urlStr);
   const isHttps = u.protocol === "https:";
   const reqPath = (u.pathname || "/") + (u.search || "");
@@ -272,11 +290,29 @@ function jiraHttpsGet(urlStr: string, headers: Record<string, string>): Promise<
         ...(isHttps ? { agent: getJiraHttpsAgent() } : {}),
       },
       (res) => {
+        const code = res.statusCode ?? 0;
+        const loc = res.headers.location;
+        if (
+          code >= 300 &&
+          code < 400 &&
+          typeof loc === "string" &&
+          loc.trim() &&
+          redirectDepth < maxRedirects
+        ) {
+          try {
+            const nextUrl = new URL(loc, urlStr).href;
+            res.resume();
+            jiraHttpsGet(nextUrl, headers, redirectDepth + 1).then(resolve).catch(reject);
+            return;
+          } catch {
+            /* fall through */
+          }
+        }
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
         res.on("end", () => {
           resolve({
-            status: res.statusCode ?? 0,
+            status: code,
             body: Buffer.concat(chunks).toString("utf8"),
           });
         });
@@ -287,16 +323,52 @@ function jiraHttpsGet(urlStr: string, headers: Record<string, string>): Promise<
   });
 }
 
+function jiraCommonHeaders(): Record<string, string> {
+  return {
+    Accept: "application/json",
+    // Some reverse proxies/WAFs drop requests without User-Agent.
+    "User-Agent": "KatalonOllamaTool/1.0 (Node.js)",
+  };
+}
+
+/**
+ * Jira DC/server: REST accepts Basic (username:password or username:PAT).
+ * Many PAT setups expect `Authorization: Bearer <PAT>` instead — try both when Basic returns 401/403.
+ */
+async function jiraGetWithAuth(
+  url: string,
+  creds: { email: string; apiToken: string }
+): Promise<{ status: number; body: string }> {
+  const basic = Buffer.from(`${creds.email}:${creds.apiToken}`, "utf8").toString("base64");
+  const r1 = await jiraHttpsGet(url, {
+    ...jiraCommonHeaders(),
+    Authorization: `Basic ${basic}`,
+  });
+  if (r1.status >= 200 && r1.status < 300) return r1;
+  if (r1.status !== 401 && r1.status !== 403) return r1;
+
+  const r2 = await jiraHttpsGet(url, {
+    ...jiraCommonHeaders(),
+    Authorization: `Bearer ${creds.apiToken}`,
+  });
+  if (r2.status >= 200 && r2.status < 300) return r2;
+  return r2.status !== r1.status ? r2 : r1;
+}
+
 function parseJiraErrorBody(status: number, bodyText: string): string {
   const raw = bodyText.trim();
   try {
     const j = JSON.parse(raw) as {
       errorMessages?: string[];
       message?: string;
+      reason?: string;
       errors?: Record<string, string>;
     };
     if (Array.isArray(j.errorMessages) && j.errorMessages.length > 0) {
       return j.errorMessages[0];
+    }
+    if (typeof j.reason === "string" && j.reason.trim()) {
+      return j.reason.trim();
     }
     if (typeof j.message === "string" && j.message.trim()) {
       return j.message.trim();
@@ -307,6 +379,9 @@ function parseJiraErrorBody(status: number, bodyText: string): string {
   } catch {
     /* not JSON */
   }
+  if (/DOCTYPE\s+html/i.test(raw)) {
+    return "Jira returned an HTML page instead of JSON — often a proxy, firewall, or SSO/WAF blocking API access (not a normal REST JSON error).";
+  }
   if (raw) return raw.slice(0, 400);
   if (status === 401) return "Authentication failed (empty response from Jira).";
   if (status === 403) return "Forbidden (empty response from Jira).";
@@ -315,7 +390,13 @@ function parseJiraErrorBody(status: number, bodyText: string): string {
 }
 
 const jiraAuthHint =
-  " Jira Cloud: Atlassian account email + API token from https://id.atlassian.com/account/security/api-tokens. Jira Server/Data Center: use your Jira login username (often not an email) with your password or a Personal Access Token (Profile → Personal Access Tokens).";
+  " Jira Cloud: Atlassian account email + API token from https://id.atlassian.com/manage-profile/security/api-tokens. Jira Server/Data Center: use your Jira login username (often not an email) with your password or a Personal Access Token (Profile → Personal Access Tokens).";
+
+const jiraCloud401Extra =
+  " For *.atlassian.net (Jira Cloud), the login field must be your Atlassian account email (same as id.atlassian.com), not a short username like CR241011 — Cloud rejects username+token Basic auth.";
+
+const jira403Hint =
+  " HTTP 403 on Cloud: confirm account + project access and correct *.atlassian.net site. On Data Center/server: REST may be restricted (admin), wrong context path (include /jira if your URL is …/jira/secure/…), or use a Personal Access Token (Bearer) — the server tries Bearer automatically after Basic fails.";
 
 /**
  * Fetch a single issue from Jira Cloud/Server using REST API v3.
@@ -327,28 +408,23 @@ export async function getJiraIssue(
 ): Promise<{ key: string; summary: string; steps: string[] }> {
   const key = normalizeJiraIssueKey(issueKey);
 
-  const baseRaw = creds.baseUrl.trim();
+  const baseRaw = sanitizeJiraInput(creds.baseUrl);
+  const email = sanitizeJiraInput(creds.email);
+  const apiToken = sanitizeJiraInput(creds.apiToken);
   if (!baseRaw) throw new JiraApiError("Jira base URL is required", 400);
-  if (!creds.email.trim()) throw new JiraApiError("Email or username is required", 400);
-  if (!creds.apiToken.trim()) throw new JiraApiError("API token is required", 400);
+  if (!email) throw new JiraApiError("Email or username is required", 400);
+  if (!apiToken) throw new JiraApiError("API token is required", 400);
 
   const base = normalizeJiraBaseUrl(baseRaw);
-  const auth = Buffer.from(`${creds.email.trim()}:${creds.apiToken.trim()}`, "utf8").toString(
-    "base64"
-  );
-  const authHeaders = {
-    Authorization: `Basic ${auth}`,
-    Accept: "application/json",
-  };
 
   let resStatus: number;
   let bodyText: string;
   try {
     const v3Url = `${base}/rest/api/3/issue/${encodeURIComponent(key)}`;
-    let r = await jiraHttpsGet(v3Url, authHeaders);
+    let r = await jiraGetWithAuth(v3Url, { email, apiToken });
     if (r.status === 404) {
       const v2Url = `${base}/rest/api/2/issue/${encodeURIComponent(key)}`;
-      r = await jiraHttpsGet(v2Url, authHeaders);
+      r = await jiraGetWithAuth(v2Url, { email, apiToken });
     }
     resStatus = r.status;
     bodyText = r.body;
@@ -374,13 +450,21 @@ export async function getJiraIssue(
   if (resStatus < 200 || resStatus >= 300) {
     const msg = parseJiraErrorBody(resStatus, bodyText);
     if (resStatus === 401) {
-      throw new JiraApiError(`${msg}${jiraAuthHint}`, 401);
+      const cloudExtra =
+        /\.atlassian\.net$/i.test(new URL(base).hostname) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+          ? jiraCloud401Extra
+          : "";
+      const dcExtra =
+        !/\.atlassian\.net$/i.test(new URL(base).hostname)
+          ? " Tried HTTP Basic and Bearer (PAT). Use your Jira password or a PAT from Profile → Personal Access Tokens."
+          : "";
+      throw new JiraApiError(`${msg}${cloudExtra}${dcExtra}${jiraAuthHint}`, 401);
     }
     if (resStatus === 403) {
-      throw new JiraApiError(
-        `${msg} (HTTP 403 — wrong account, token, or no permission to this issue/project.)${jiraAuthHint}`,
-        403
+      console.warn(
+        `[jira] ${resStatus} issue=${key} host=${new URL(base).hostname} jiraMessage=${msg.slice(0, 200)}`
       );
+      throw new JiraApiError(`${msg}${jira403Hint}`, 403);
     }
     if (resStatus === 404) {
       throw new JiraApiError("Issue not found (checked REST API v3 and v2).", 404);
@@ -412,4 +496,144 @@ export async function getJiraIssue(
     summary,
     steps,
   };
+}
+
+function isProbablyHtmlJiraResponse(body: string): boolean {
+  const t = body.trim().slice(0, 800).toLowerCase();
+  return (
+    t.startsWith("<!") ||
+    t.startsWith("<html") ||
+    t.includes("<!doctype html") ||
+    (t.includes("<head") && t.includes("<body"))
+  );
+}
+
+/** Parse /myself JSON or explain HTML / garbage (proxy, SSO, wrong context path). */
+function parseJiraMyselfJson(body: string, base: string): {
+  displayName?: string;
+  name?: string;
+  emailAddress?: string;
+  accountId?: string;
+} {
+  const raw = body.trim();
+  if (!raw) {
+    throw new JiraApiError(
+      "Jira returned an empty body for /myself. Check the Jira base URL and that the REST API is enabled.",
+      502
+    );
+  }
+  if (isProbablyHtmlJiraResponse(raw)) {
+    const withJira = base.endsWith("/jira") ? base : `${base}/jira`;
+    throw new JiraApiError(
+      `Jira /myself returned HTML (not JSON), usually a login/SSO/proxy page or wrong site path. ` +
+        `If your browser opens Jira under .../jira/..., set Jira base URL to include /jira (example: ${withJira}).`,
+      502
+    );
+  }
+  try {
+    return JSON.parse(raw) as {
+      displayName?: string;
+      name?: string;
+      emailAddress?: string;
+      accountId?: string;
+    };
+  } catch {
+    const preview = raw.slice(0, 160).replace(/\s+/g, " ");
+    throw new JiraApiError(
+      `Jira /myself response was not valid JSON (preview): ${preview}`,
+      502
+    );
+  }
+}
+
+/**
+ * GET /rest/api/3/myself — confirms email+token (or Server username+secret) work before loading an issue.
+ * If this succeeds but GET issue returns 403, the problem is project/issue permission, not the token.
+ */
+export async function getJiraMyself(
+  creds: JiraCredentials
+): Promise<{ displayName: string; emailAddress?: string; accountId?: string }> {
+  const baseRaw = sanitizeJiraInput(creds.baseUrl);
+  const email = sanitizeJiraInput(creds.email);
+  const apiToken = sanitizeJiraInput(creds.apiToken);
+  if (!baseRaw) throw new JiraApiError("Jira base URL is required", 400);
+  if (!email) throw new JiraApiError("Email or username is required", 400);
+  if (!apiToken) throw new JiraApiError("API token is required", 400);
+
+  const base = normalizeJiraBaseUrl(baseRaw);
+
+  const fetchMyself = async (apiBase: string) => {
+    let r = await jiraGetWithAuth(`${apiBase}/rest/api/3/myself`, { email, apiToken });
+    if (r.status === 404) {
+      r = await jiraGetWithAuth(`${apiBase}/rest/api/2/myself`, { email, apiToken });
+    }
+    return r;
+  };
+
+  const mapMyself = (data: {
+    displayName?: string;
+    name?: string;
+    emailAddress?: string;
+    accountId?: string;
+  }) => {
+    const displayName = (data.displayName ?? data.name ?? "").trim() || "(unknown)";
+    return {
+      displayName,
+      emailAddress: typeof data.emailAddress === "string" ? data.emailAddress : undefined,
+      accountId: typeof data.accountId === "string" ? data.accountId : undefined,
+    };
+  };
+
+  const handleErrorStatus = (status: number, body: string, hostBase: string) => {
+    const msg = parseJiraErrorBody(status, body);
+    if (status === 401) {
+      const cloudExtra =
+        /\.atlassian\.net$/i.test(new URL(hostBase).hostname) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+          ? jiraCloud401Extra
+          : "";
+      const dcExtra =
+        !/\.atlassian\.net$/i.test(new URL(hostBase).hostname)
+          ? " Tried HTTP Basic and Bearer (PAT). Use your Jira password or a PAT from Profile → Personal Access Tokens."
+          : "";
+      throw new JiraApiError(`${msg}${cloudExtra}${dcExtra}${jiraAuthHint}`, 401);
+    }
+    if (status === 403) {
+      throw new JiraApiError(`${msg}${jira403Hint}`, 403);
+    }
+    const code = status >= 400 && status < 600 ? status : 502;
+    throw new JiraApiError(msg, code);
+  };
+
+  const tryBases: string[] = [base];
+  const root = base.replace(/\/+$/, "");
+  if (!root.toLowerCase().endsWith("/jira")) {
+    tryBases.push(`${root}/jira`);
+  }
+
+  let lastParseError: JiraApiError | undefined;
+  for (let i = 0; i < tryBases.length; i++) {
+    const apiBase = tryBases[i];
+    const r = await fetchMyself(apiBase);
+    if (r.status < 200 || r.status >= 300) {
+      if (r.status === 404 && i < tryBases.length - 1) {
+        continue;
+      }
+      handleErrorStatus(r.status, r.body, apiBase);
+    }
+    try {
+      const data = parseJiraMyselfJson(r.body, apiBase);
+      return mapMyself(data);
+    } catch (e) {
+      if (e instanceof JiraApiError) {
+        lastParseError = e;
+        if (i < tryBases.length - 1) {
+          continue;
+        }
+      }
+      throw e;
+    }
+  }
+
+  if (lastParseError) throw lastParseError;
+  throw new JiraApiError("Could not reach Jira /myself", 502);
 }
