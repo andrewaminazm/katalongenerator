@@ -140,7 +140,7 @@ export default function App() {
   const [convertReport, setConvertReport] = useState<ConvertLocatorResultItem[] | null>(null);
   const [convertLoading, setConvertLoading] = useState(false);
   const [autoConvertBeforeGenerate, setAutoConvertBeforeGenerate] = useState(false);
-  const [testCaseName, setTestCaseName] = useState("TC_Login_Smoke");
+  const [testCaseName, setTestCaseName] = useState("");
   const [katalonProjectPath, setKatalonProjectPath] = useState("");
   const [stylePass, setStylePass] = useState<StylePass>("none");
   const [useStream, setUseStream] = useState(false);
