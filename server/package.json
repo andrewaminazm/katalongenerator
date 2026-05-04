@@ -19,7 +19,8 @@
     "express": "^4.21.1",
     "fast-xml-parser": "^4.5.0",
     "multer": "^1.4.5-lts.1",
-    "playwright": "^1.49.1"
+    "playwright": "^1.49.1",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.8",

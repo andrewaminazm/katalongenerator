@@ -10,11 +10,9 @@ import express from "express";
 import { createApiRouter } from "./routes/api.js";
 import { logJiraTlsStartupHint } from "./services/jira.js";
 
-const PORT = Number(process.env.PORT) || 8787;
-
 logJiraTlsStartupHint();
 
-const app = express();
+export const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "8mb" }));
 
@@ -33,19 +31,26 @@ app.use(
   }
 );
 
-const ollamaBase =
-  process.env.OLLAMA_BASE_URL?.replace(/\/$/, "") || "http://127.0.0.1:11434";
+// Only start the HTTP server when running directly (local dev / Node process).
+// When imported as a module (Netlify Function / serverless-http), skip listen().
+const isMain =
+  process.argv[1] &&
+  (process.argv[1].endsWith("index.ts") ||
+    process.argv[1].endsWith("index.js") ||
+    process.argv[1].includes("tsx"));
 
-const server = app.listen(PORT, () => {
-  console.log(`Katalon Ollama server listening on http://localhost:${PORT}`);
-  console.log(`Ollama API (generate): ${ollamaBase} — if generate fails with "fetch failed", run ollama serve and check this URL matches`);
-});
+if (isMain || (!process.env.NETLIFY && !process.env.LAMBDA_TASK_ROOT)) {
+  const PORT = Number(process.env.PORT) || 8787;
 
-// Default 0 = no HTTP keep-alive timeout. Slow local Ollama + large imported OR lists often exceed 200s;
-// a finite timeout was closing the socket mid-generation (browser showed "Internal Server Error").
-const rawTimeout = process.env.SERVER_REQUEST_TIMEOUT_MS?.trim();
-const timeoutMs = rawTimeout !== undefined && rawTimeout !== "" ? Number(rawTimeout) : 0;
-server.setTimeout(Number.isFinite(timeoutMs) && timeoutMs >= 0 ? timeoutMs : 0);
-if (timeoutMs > 0) {
-  console.log(`HTTP server request timeout: ${timeoutMs} ms`);
+  const server = app.listen(PORT, () => {
+    console.log(`Katalon Ollama server listening on http://localhost:${PORT}`);
+  });
+
+  // Default 0 = no HTTP keep-alive timeout.
+  const rawTimeout = process.env.SERVER_REQUEST_TIMEOUT_MS?.trim();
+  const timeoutMs = rawTimeout !== undefined && rawTimeout !== "" ? Number(rawTimeout) : 0;
+  server.setTimeout(Number.isFinite(timeoutMs) && timeoutMs >= 0 ? timeoutMs : 0);
+  if (timeoutMs > 0) {
+    console.log(`HTTP server request timeout: ${timeoutMs} ms`);
+  }
 }

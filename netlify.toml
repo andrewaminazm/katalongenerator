@@ -1,0 +1,30 @@
+[build]
+  command = "npm run build:netlify"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Route all /api/* requests to the serverless Express function
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/:splat"
+  status = 200
+
+# SPA fallback: React / Vite client-side routing
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+[functions]
+  directory    = "netlify/functions"
+  node_bundler = "esbuild"
+
+  # Include server data dir so esbuild bundles it (ephemeral on Lambda — /tmp is used at runtime)
+  included_files = ["server/data/**"]
+
+# Extend function timeout — Gosi Brain calls can take 5–15 s.
+# Free plan max: 10 s. Pro plan max: 26 s.
+[functions."api"]
+  timeout = 26
