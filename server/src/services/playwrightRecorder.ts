@@ -20,7 +20,7 @@ async function getChromium(): Promise<BrowserType<Browser>> {
 }
 import { parsePlaywrightScriptToDsl } from "./playwrightActionParser.js";
 
-const __recDir = path.dirname(fileURLToPath(import.meta.url));
+const __recDir = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 
 export interface RecorderLocator {
   name: string;

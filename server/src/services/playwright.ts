@@ -24,7 +24,7 @@ import {
   resolvePlaywrightLocale,
 } from "./playwrightLocale.js";
 
-const __pwDir = path.dirname(fileURLToPath(import.meta.url));
+const __pwDir = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 
 let cachedLocatorExtractorSource: string | null = null;
 

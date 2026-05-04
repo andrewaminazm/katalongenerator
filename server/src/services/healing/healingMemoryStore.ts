@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import type { FallbackLocator, HealingMemoryEntry } from "./types.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 const DATA_DIR =
   process.env.NETLIFY || process.env.READONLY_FS || process.env.LAMBDA_TASK_ROOT
     ? path.join("/tmp", "katalon-data")

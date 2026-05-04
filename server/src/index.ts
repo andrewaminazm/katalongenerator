@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cors from "cors";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
 dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
 import express from "express";

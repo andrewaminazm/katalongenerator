@@ -28,7 +28,7 @@ import {
   resolvePlaywrightLocale,
 } from "./playwrightLocale.js";
 
-const __dir = dirname(fileURLToPath(import.meta.url));
+const __dir = (() => { try { return dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 
 let cachedCollectorJs: string | null = null;
 
