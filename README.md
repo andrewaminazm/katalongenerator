@@ -1,4 +1,4 @@
-# Katalon Script Generator (Katalon Groovy Generator)
+# Katalon Script Generator
 
 Production-oriented web app that converts:
 
