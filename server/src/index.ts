@@ -13,7 +13,26 @@ import { logJiraTlsStartupHint } from "./services/jira.js";
 logJiraTlsStartupHint();
 
 export const app = express();
-app.use(cors({ origin: true }));
+
+// ALLOWED_ORIGINS: comma-separated list of allowed origins, e.g.
+// "https://yoursite.netlify.app,https://custom-domain.com"
+// Falls back to allowing all origins when not set (local dev).
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ?.split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins?.length
+      ? (origin, cb) => {
+          if (!origin || allowedOrigins.includes(origin)) cb(null, true);
+          else cb(new Error(`CORS: origin ${origin} not allowed`));
+        }
+      : true,
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "8mb" }));
 
 app.use("/api", createApiRouter());

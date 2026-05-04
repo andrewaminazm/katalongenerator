@@ -1,4 +1,6 @@
-const API_BASE = "";
+// In production (Netlify) this is set to the Render backend URL via VITE_API_URL.
+// In local dev it stays empty so Vite's proxy forwards /api/* to localhost:8787.
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 export type Platform = "web" | "mobile";
 

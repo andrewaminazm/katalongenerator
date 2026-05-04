@@ -5,11 +5,8 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Route all /api/* requests to the serverless Express function
-[[redirects]]
-  from   = "/api/*"
-  to     = "/.netlify/functions/api/:splat"
-  status = 200
+# API calls go directly to the Render backend (configured via VITE_API_URL).
+# No /api/* redirect needed here — the frontend uses the full Render URL.
 
 # SPA fallback: React / Vite client-side routing
 [[redirects]]
