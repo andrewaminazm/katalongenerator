@@ -209,13 +209,13 @@ export default function App() {
   useEffect(() => {
     healthCheck()
       .then((h) => {
-        const gosi =
+        setHealth(
           h.gosiBrainConfigured === true
-            ? "Gosi Brain: configured"
-            : "Gosi Brain: not configured (set GOSI_BRAIN_CHAT_URL and GOSI_BRAIN_API_KEY on server)";
-        setHealth(gosi);
+            ? "ok"
+            : "missing-env"
+        );
       })
-      .catch(() => setHealth("API unreachable — start the backend"));
+      .catch(() => setHealth("unreachable"));
     loadHistory();
   }, [loadHistory]);
 
@@ -757,7 +757,31 @@ export default function App() {
           <h1>Katalon script generator</h1>
         </div>
         <div className="header-meta">
-          {health && <span className="badge">{health}</span>}
+          {health && (
+            <span
+              className="badge"
+              style={{
+                background:
+                  health === "ok"
+                    ? "var(--ok-bg, #e8f5e9)"
+                    : health === "unreachable"
+                    ? "var(--error-bg, #ffebee)"
+                    : "var(--warn-bg, #fff8e1)",
+                color:
+                  health === "ok"
+                    ? "var(--ok, #2e7d32)"
+                    : health === "unreachable"
+                    ? "var(--error, #c62828)"
+                    : "var(--warn, #e65100)",
+              }}
+            >
+              {health === "ok"
+                ? "Gosi Brain: ready"
+                : health === "unreachable"
+                ? "API unreachable"
+                : "Gosi Brain: set GOSI_BRAIN_CHAT_URL + API_KEY in Netlify env vars"}
+            </span>
+          )}
           <button
             type="button"
             className="theme-toggle"
