@@ -6,7 +6,23 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
-import { chromium, type Page } from "playwright";
+import type { Page, BrowserType, Browser } from "playwright";
+
+// Lazy loader — safe in serverless environments where playwright is not installed.
+let _chromium: BrowserType<Browser> | null = null;
+async function getChromium(): Promise<BrowserType<Browser>> {
+  if (_chromium) return _chromium;
+  try {
+    const pw = await import("playwright");
+    _chromium = pw.chromium as BrowserType<Browser>;
+    return _chromium;
+  } catch {
+    throw new Error(
+      "Playwright is not available in this environment (serverless deployment). " +
+        "Browser-based locator extraction requires the standard Node.js server."
+    );
+  }
+}
 import {
   type PlaywrightLocaleMode,
   resolvePlaywrightLocale,
@@ -254,7 +270,7 @@ export async function extractPlaywrightLocatorLines(
   const mode = opts?.locale ?? "auto";
   const { locale, acceptLanguage, gotoUrl } = resolvePlaywrightLocale(url, mode);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await (await getChromium()).launch({ headless: true });
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 },
     locale,

@@ -1,7 +1,24 @@
 import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { chromium, type Browser } from "playwright";
+import type { Browser, BrowserType } from "playwright";
+
+// Lazy loader — no top-level require so the module is safe to import in
+// serverless (Netlify/Lambda) environments where playwright is not installed.
+let _chromium: BrowserType<Browser> | null = null;
+async function getChromium(): Promise<BrowserType<Browser>> {
+  if (_chromium) return _chromium;
+  try {
+    const pw = await import("playwright");
+    _chromium = pw.chromium as BrowserType<Browser>;
+    return _chromium;
+  } catch {
+    throw new Error(
+      "Playwright is not available in this environment (serverless deployment). " +
+        "Browser-based locator extraction requires the standard Node.js server."
+    );
+  }
+}
 import {
   type PlaywrightLocaleMode,
   resolvePlaywrightLocale,
@@ -47,7 +64,7 @@ let browserSingleton: Promise<Browser> | null = null;
 /** @internal Exported for self-healing / advanced Playwright flows. */
 export async function getSharedBrowser(): Promise<Browser> {
   if (!browserSingleton) {
-    browserSingleton = chromium.launch({ headless: true });
+    browserSingleton = getChromium().then((c) => c.launch({ headless: true }));
   }
   try {
     return await browserSingleton;

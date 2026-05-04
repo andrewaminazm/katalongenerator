@@ -1,8 +1,23 @@
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import type { Browser, BrowserContext, Page } from "playwright";
-import { chromium } from "playwright";
+import type { Browser, BrowserContext, Page, BrowserType } from "playwright";
+
+// Lazy loader — safe in serverless environments where playwright is not installed.
+let _chromium: BrowserType<Browser> | null = null;
+async function getChromium(): Promise<BrowserType<Browser>> {
+  if (_chromium) return _chromium;
+  try {
+    const pw = await import("playwright");
+    _chromium = pw.chromium as BrowserType<Browser>;
+    return _chromium;
+  } catch {
+    throw new Error(
+      "Playwright is not available in this environment (serverless deployment). " +
+        "Browser recording requires the standard Node.js server."
+    );
+  }
+}
 import { parsePlaywrightScriptToDsl } from "./playwrightActionParser.js";
 
 const __recDir = path.dirname(fileURLToPath(import.meta.url));
@@ -177,7 +192,7 @@ async function runRecordingSession(
     resolveFinish?.();
   };
 
-  const browser = await chromium.launch({ headless: false });
+  const browser = await (await getChromium()).launch({ headless: false });
   recordingBrowser = browser;
   let context: BrowserContext | null = null;
   try {

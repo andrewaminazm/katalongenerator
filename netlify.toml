@@ -21,6 +21,11 @@
   directory    = "netlify/functions"
   node_bundler = "esbuild"
 
+  # Playwright (and its chromium-bidi sub-dep) cannot be bundled or run on Lambda.
+  # Mark as external so esbuild skips them; the service modules use lazy dynamic
+  # imports and will return a clear 503 if a recording route is ever called.
+  external_node_modules = ["playwright", "playwright-core", "chromium-bidi"]
+
   # Include server data dir so esbuild bundles it (ephemeral on Lambda — /tmp is used at runtime)
   included_files = ["server/data/**"]
 
