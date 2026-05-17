@@ -1,258 +1,180 @@
-# Katalon Script Generator — User Guide
+# Katalon Script Generator — How to use
 
-This guide explains how to use the web application for every input tab and the shared options below them.
-
----
-
-## 1. What the application does
-
-The tool converts human-readable **test steps** (and optional **locators**) into **Katalon Studio Groovy** scripts for WebUI or Mobile keywords. Generation uses **Gosi Brain** on the server.
+This guide is for **end users**. It explains how to enter test steps on each tab, how to add locators (by hand or by fetching them), and how to **generate Katalon Groovy** code.
 
 ---
 
-## 2. Running locally vs production
+## Before you start
 
-### Local development
+1. Make sure the green status shows **Gosi Brain: ready** (top right). If you see **API unreachable**, contact your administrator — the app cannot reach the server.
+2. Choose **Platform**: **Web (WebUI)** for websites, **Mobile** for apps via Appium (see “Mobile” at the end).
 
-- Start **backend**: `npm run dev` in `server/` (default port **8787**).
-- Start **frontend**: `npm run dev` in `client/` (default port **5173**).
-- Open `http://localhost:5173`. API calls use the Vite proxy to the backend.
+Your workflow is always:
 
-### Production (example layout)
-
-- **Frontend** may be hosted on Netlify (static site).
-- **Backend** should run on a full Node host such as **Render** where **Playwright** can launch Chromium (locator extraction and browser recording).
-
-Configure the frontend build with **`VITE_API_URL`** pointing at your backend URL (no trailing slash). On the backend, set **`ALLOWED_ORIGINS`** to your Netlify URL(s) for CORS.
+1. **Get test steps** (Manual, CSV, Jira, or Record tab).
+2. **Add locators** — type them yourself **and/or** fetch them from a page URL **and/or** use recording (Record tab fills locators automatically).
+3. Scroll down and click **Generate Katalon Groovy**. The script appears in the panel on the right.
 
 ---
 
-## 3. Header status
+## The four tabs (where your steps come from)
 
-- **Gosi Brain: ready** — backend is reachable and chat URL + API key are configured.
-- **API unreachable** — frontend cannot reach `/api/health` (wrong `VITE_API_URL`, backend down, or network).
-- **Gosi Brain: set … env vars** — backend runs but server-side credentials are missing.
+Use **one tab at a time** as the source of steps when you generate.
 
-### Optional bearer token
+### Manual
 
-If your organisation passes a JWT via WebView, open the app once with **`?token=your_token`** (or full `Bearer …`). It is saved in the browser and sent with generate requests. If empty, the server may use **`GOSI_BRAIN_AUTHORIZATION_TOKEN`** from environment variables instead.
-
----
-
-## 4. Tabs overview
-
-| Tab | Purpose |
-|-----|---------|
-| **Manual** | Type or paste steps yourself. |
-| **CSV** | Import steps from a CSV file (simple rows or multi test-case export). |
-| **Jira** | Fetch steps from a Jira issue description (optional credentials). |
-| **Record** | Capture a Web flow in a real Chromium window on the **backend machine**; produces a Playwright-style script and locator lines. |
-
-**Note:** **Record** is disabled when **Platform** is **Mobile** — recording uses Web-only Playwright.
-
----
-
-## 5. Shared fields (below every tab)
-
-These apply whichever tab is selected.
-
-### Platform
-
-- **Web (WebUI)** — Standard browser automation keywords.
-- **Mobile (Mobile)** — Requires **Appium** running locally (see section 10).
-
-### Gosi Brain model
-
-Choose the model exposed by your server configuration (default is shown in the dropdown).
-
-### Test case name (optional)
-
-Used when naming or exporting the generated test case. Leave blank if you do not need a fixed name.
-
-### Katalon project path (for export)
-
-Absolute path to your **Katalon Studio project folder** on **your PC** (must contain a **`Test Cases`** directory). Used by **Add to Katalon Project** — this writes files **locally**, not on the server.
-
-### Format / style pass
-
-- **None** — Minimal post-processing.
-- **Simplify layout** — Cleans up formatting after generation.
-- **Match project style** — Adjusts wording/layout toward your project context.
-
-### Locators
-
-One line per mapping, for example:
+1. Open the **Manual** tab.
+2. In **Test steps (one per line)**, type each step on its own line, for example:
 
 ```text
-Login button = #submit-login
-Username field = input[name='user']
+Open https://example.com/login
+Click Login
+Type username into Username field
 ```
 
-Names can align with steps so the compiler resolves targets. Manual lines **take priority** when merged with auto-detected lines.
+3. Adjust locators below (see **Locators — three ways**), then click **Generate Katalon Groovy**.
 
-### Auto convert before generate
-
-When enabled, Playwright/Selenium/Cypress-style locator lines are converted to **Katalon CSS/XPath** before generation.
-
-Use **Convert to Katalon Locators** to preview the conversion table without generating yet.
-
-### Page URL (preview & auto-detect for generate)
-
-HTTPS URL of the page under test. Used by:
-
-- **Preview locators from URL** — fills the read-only Playwright-style preview panel.
-- **Auto-detect for generate** — server visits the URL and merges detected locator candidates into generation (manual locators still win on conflicts).
-
-### Page language (Playwright extraction)
-
-**Auto**, **English**, or **Arabic** — influences browser locale when extracting locators from the Page URL.
-
-### Auto-detect for generate
-
-When checked (and Page URL is filled), the backend pulls locator candidates from the live page during **Generate**. Requires a backend with working **Playwright + Chromium** (set **`PLAYWRIGHT_BROWSERS_PATH`** on hosts like Render so browsers persist after build).
-
-### Stream response (live typing)
-
-Streams tokens into the Groovy panel during generation instead of waiting for one response.
+**Tip:** Write steps clearly (what to click, type, or open). One idea per line works best.
 
 ---
 
-## 6. Manual tab
+### CSV
 
-1. Enter **test steps**, **one per line**.
-2. Optionally fill **Locators**, **Page URL**, enable **Auto-detect**, etc.
+1. Open the **CSV** tab.
+2. Choose your `.csv` file.
+3. **Simple files:** rows become steps automatically (columns like Step / Description).
+4. **Test-case exports:** you see a table of test cases — tick the rows you want, then **Select all** / **Clear all** as needed. Only checked rows supply steps.
+5. Stay on **CSV**, set locators if needed, then **Generate Katalon Groovy**.
+
+---
+
+### Jira
+
+1. Open the **Jira** tab.
+2. Fill **Jira base URL**, **Email or username**, and **Password / PAT / API token** (your administrator will tell you what to use).
+3. Enter the **Issue key** (for example `PROJ-123`) or paste the browse URL.
+4. Click **Fetch from Jira**. Steps appear in **Test steps from Jira** — you can edit them.
+5. Stay on **Jira**, add locators if needed, then **Generate Katalon Groovy**.
+
+If you leave credentials empty, only **demo** sample steps load (for practice).
+
+---
+
+### Record (Web only)
+
+Recording is **only for Web**. It opens a **real browser window on the server** — complete your actions there, then finish recording.
+
+1. Open the **Record** tab (switch **Platform** to **Web** if Record is greyed out).
+2. Enter the **URL to open**.
+3. Click **Record test flow**. Use the Chromium window that opens; use **Finish recording** when done (or wait for timeout).
+4. The tool fills the **Playwright-style script** area and **merges locator lines** into the main **Locators** box below.
+5. Scroll down, review locators, then **Generate Katalon Groovy**.
+
+**Alternatives:** You can paste a Playwright script instead of recording. **Lossless replay** keeps the recording closer to what you did (fewer automatic changes).
+
+If recording gets stuck, use **Cancel recording on server**.
+
+---
+
+## Locators — three ways (manual, preview, auto-detect)
+
+Locators tell the generator **which element** each step refers to. They live in the big **Locators** box (same area on every tab).
+
+### Option A — Enter locators manually
+
+Type **one mapping per line**:
+
+```text
+Login button = #btn-login
+Username field = input#username
+Password field = //input[@type='password']
+```
+
+Left side = **short name** you can mention in steps. Right side = **CSS selector** or **XPath**.
+
+Manual lines are **never overwritten**: if the tool also finds locators from the page, **your manual lines win** when labels match.
+
+---
+
+### Option B — Preview locators from a URL (reference only)
+
+Use this to **see** suggested Playwright-style lines without replacing your Locators box yet.
+
+1. Fill **Page URL (preview & auto-detect for generate)** with the **https://** address of the page.
+2. Set **Page language** to **Auto**, **English**, or **Arabic** if the site uses Arabic UI text.
+3. Click **Preview locators from URL**.
+4. Read the **Playwright locators preview** panel. To reuse lines, copy what you need into **Locators** and edit labels if you want (`My label = …`).
+
+*(Your organisation must run the feature on a server that supports browser automation.)*
+
+---
+
+### Option C — Auto-detect during Generate
+
+1. Fill **Page URL** as above.
+2. Turn on **Auto-detect for generate** (checkbox).
+3. When you click **Generate Katalon Groovy**, the server visits the page and **adds** locator candidates that fit your steps. Your **manual Locators lines still take priority** where both exist.
+
+---
+
+### Recording fills Locators for you
+
+After **Record test flow**, **`name = selector`** lines are **merged into Locators**. You can edit that box before generating.
+
+---
+
+### Convert Playwright-style lines to Katalon format
+
+If your Locators box contains Playwright/Selenium/Cypress style lines:
+
+1. Optionally turn on **Auto convert before generate** so conversion happens automatically when you generate.
+2. Or click **Convert to Katalon Locators** first to see a table of results, then generate.
+
+---
+
+## Generate Katalon Groovy
+
+When your **steps** are ready from the active tab **and** your **locators** situation is clear:
+
+1. Scroll to **Generate Katalon Groovy** (green button).
+2. Optional: enable **Stream response (live typing)** to watch the script appear gradually.
 3. Click **Generate Katalon Groovy**.
 
-**Tip:** Clear step-specific wording (“Click Login”, “Type password”) helps the compiler.
+Wait until generation finishes. Errors appear in red above the button — read the message and fix steps or locators, then try again.
+
+**Optional fields you can set before generating:**
+
+- **Gosi Brain model** — leave default unless instructed otherwise.
+- **Test case name** — optional name for export/download.
+- **Format / style pass** — optional cleanup of the generated script layout.
 
 ---
 
-## 7. CSV tab
+## After generation (right-hand panel)
 
-### Upload
+- **Copy** — copy Groovy to the clipboard.
+- **Download .groovy** — save the file.
+- **Add to Katalon Project** — needs **Katalon project path** filled with your **local** Katalon project folder (must contain **Test Cases**).
+- **Clear** — clears the output area.
 
-Choose a `.csv` file. The parser detects two shapes:
-
-### Simple format
-
-Columns similar to **`Step`** and **`Description`** — each row becomes step text used for generation.
-
-### Test-case export format
-
-Multiple test cases with a **`Steps`** column (for example Zephyr/VIC-style exports). Expected-result suffixes such as **`| Expected: …`** are stripped.
-
-After load:
-
-- Use **Select all** / **Clear all** and row checkboxes to choose which test cases contribute steps.
-- The status line shows how many steps will be sent to **Generate**.
-
-### Generate
-
-Stay on CSV after selection and click **Generate Katalon Groovy** — steps come from selected rows.
+You may see **lint** hints below the script — fix serious errors in Katalon if needed.
 
 ---
 
-## 8. Jira tab
+## Mobile testing (short overview)
 
-### Credentials (optional)
+When **Platform** is **Mobile**:
 
-- **Jira base URL** — Site root only, e.g. `https://your-domain.atlassian.net` or `https://jira.company.com`.
-- **Email or username** — Atlassian Cloud uses email; Server/Data Center may use username.
-- **Password, PAT, or API token** — Same combination you would use for Basic auth or PAT-only REST where configured.
+- Start **Appium** on your machine (often `http://127.0.0.1:4723`).
+- Paste **Capabilities (JSON)** for your device/emulator.
+- **Start session**, then **Extract locators** to fill suggestions into **Locators**.
+- Enter mobile **steps** on **Manual** (or use recording flows your administrator documented).
+- **Generate Katalon Groovy** as usual.
 
-Leave all three empty to load **demo** steps only (nothing is stored on the server).
-
-### Buttons
-
-- **Test Jira login** — Calls **`GET /myself`** to verify URL and credentials without loading an issue.
-- **Fetch from Jira** — Loads the issue and parses steps into the **Test steps from Jira** box.
-
-### Editing steps
-
-Edit the textarea if needed — **Generate** uses exactly these lines while you remain on the **Jira** tab.
-
-### Troubleshooting
-
-- **401** — Wrong URL, user, or secret.
-- **403** — Often blocked Basic auth or missing REST permission; try a **PAT** or ask your Jira admin.
+The **Record** tab is hidden for Mobile — Web recording does not apply.
 
 ---
 
-## 9. Record tab (Web only)
+## History
 
-Recording opens **Chromium on the machine running the backend**, not inside your laptop browser alone.
-
-1. Enter **URL to open**.
-2. Click **Record test flow** — interact with the browser window; finish via **Finish recording** on the page or wait for timeout.
-3. The **Playwright-style script** textarea fills; locator **`name = selector`** lines merge into **Locators**.
-4. Adjust locators if needed, then **Generate Katalon Groovy**.
-
-### Lossless replay
-
-Check **Lossless replay** to minimise rewriting (preserve trace fidelity; skips some Groovy optimisers).
-
-### Stuck session
-
-Use **Cancel recording on server** if you closed the browser or refreshed the UI while a session was active.
-
-### Paste-only workflow
-
-You may paste an existing Playwright script instead of recording — still fill **URL** when the server needs it for locator extraction.
-
----
-
-## 10. Mobile (Appium) panel
-
-Shown when **Platform** is **Mobile**.
-
-1. Start **Appium** locally (default `http://127.0.0.1:4723`).
-2. Paste **Capabilities** as JSON matching your device/emulator.
-3. **Check Appium** — Verifies connectivity.
-4. **Start session** — Opens an Appium session.
-5. **Extract locators** — Reads page source and fills locator suggestions into **Locators**.
-6. **Stop session** — Ends the session.
-
-### Mobile recording proxy
-
-**Start Recording** / **Stop Recording** uses a proxy URL shown in the hint — use it **only** in Appium Inspector or another client as directed; **do not** replace the main Appium URL field used for extract/stop.
-
-**Apply to Steps+Locators** moves captured commands into Manual-oriented steps when recording stopped.
-
----
-
-## 11. Output panel
-
-- **Clear** — Clears generated Groovy text.
-- **Copy** — Copies script to clipboard.
-- **Add to Katalon Project** — Writes under **Test Cases** using **Katalon project path** (local disk).
-- **Download .groovy** — Downloads the script file.
-
-Lint warnings may appear below when the server validates Groovy.
-
----
-
-## 12. History
-
-Past generations may appear in **History** — click an entry to reload steps and script into the workspace.
-
----
-
-## 13. Quick checklist before Generate
-
-- Backend reachable (**Gosi Brain: ready**).
-- Valid bearer token if your deployment requires it (or server env fallback configured).
-- Steps present **or** Record tab has script/URL as required.
-- Locators filled or **Auto-detect** + **Page URL** if you rely on automatic mapping.
-- **Playwright features** only work where Chromium is installed on the backend (`npx playwright install chromium` during deploy and persistent browser path if applicable).
-
----
-
-## 14. Support commands (maintainers)
-
-From repository root:
-
-```bash
-npm run docs:user-pdf
-```
-
-Rebuilds **`docs/USER_GUIDE.pdf`** from this Markdown file (requires Playwright/Chromium locally).
+If **History** appears at the bottom, click an older run to reload its steps and script into the workspace.
