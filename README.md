@@ -150,6 +150,8 @@ This prevents silent wrong matches (for example, “click Settings” incorrectl
 
 - **Full project guide (Markdown)**: `docs/PROJECT_GUIDE.md`
 - **Full project guide (PDF)**: `docs/PROJECT_GUIDE.pdf`
+- **End-user guide — how to use every tab (Markdown)**: `docs/USER_GUIDE.md`
+- **End-user guide (PDF)**: `docs/USER_GUIDE.pdf` — rebuild with `npm run docs:user-pdf`
 
 ## Architecture
 

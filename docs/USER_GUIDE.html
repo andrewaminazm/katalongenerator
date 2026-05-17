@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>User Guide — Katalon Script Generator</title>
+  <style>
+    :root {
+      --fg: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #ffffff;
+      --code-bg: #0b1020;
+      --code-fg: #e5e7eb;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    html, body { background: var(--bg); color: var(--fg); font-family: var(--sans); }
+    body { margin: 0; padding: 32px 44px; }
+    h1, h2, h3, h4 { margin: 22px 0 10px; }
+    h1 { font-size: 28px; letter-spacing: -0.01em; }
+    h2 { font-size: 20px; padding-top: 8px; border-top: 1px solid var(--border); }
+    h3 { font-size: 16px; }
+    p, li { font-size: 12.5px; line-height: 1.55; color: var(--fg); }
+    li { margin: 4px 0; }
+    ul { padding-left: 18px; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    code.inline {
+      font-family: var(--mono);
+      font-size: 0.95em;
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    pre.code {
+      background: var(--code-bg);
+      color: var(--code-fg);
+      padding: 14px 14px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      margin: 10px 0 14px;
+    }
+    pre.code code {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    figure.img { margin: 14px 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+    figure.img img { max-width: 100%; height: auto; border-radius: 8px; }
+    figure.img figcaption { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  </style>
+</head>
+<body>
+<h1>Katalon Script Generator — User Guide</h1>
+<p>This guide explains how to use the web application for every input tab and the shared options below them.</p>
+<hr />
+<h2>1. What the application does</h2>
+<p>The tool converts human-readable **test steps** (and optional **locators**) into **Katalon Studio Groovy** scripts for WebUI or Mobile keywords. Generation uses **Gosi Brain** on the server.</p>
+<hr />
+<h2>2. Running locally vs production</h2>
+<h3>Local development</h3>
+<ul>
+<li>Start **backend**: <code class="inline">npm run dev</code> in <code class="inline">server/</code> (default port **8787**).</li>
+<li>Start **frontend**: <code class="inline">npm run dev</code> in <code class="inline">client/</code> (default port **5173**).</li>
+<li>Open <code class="inline">http://localhost:5173</code>. API calls use the Vite proxy to the backend.</li>
+</ul>
+<h3>Production (example layout)</h3>
+<ul>
+<li>**Frontend** may be hosted on Netlify (static site).</li>
+<li>**Backend** should run on a full Node host such as **Render** where **Playwright** can launch Chromium (locator extraction and browser recording).</li>
+</ul>
+<p>Configure the frontend build with **<code class="inline">VITE_API_URL</code>** pointing at your backend URL (no trailing slash). On the backend, set **<code class="inline">ALLOWED_ORIGINS</code>** to your Netlify URL(s) for CORS.</p>
+<hr />
+<h2>3. Header status</h2>
+<ul>
+<li>**Gosi Brain: ready** — backend is reachable and chat URL + API key are configured.</li>
+<li>**API unreachable** — frontend cannot reach <code class="inline">/api/health</code> (wrong <code class="inline">VITE_API_URL</code>, backend down, or network).</li>
+<li>**Gosi Brain: set … env vars** — backend runs but server-side credentials are missing.</li>
+</ul>
+<h3>Optional bearer token</h3>
+<p>If your organisation passes a JWT via WebView, open the app once with **<code class="inline">?token=your_token</code>** (or full <code class="inline">Bearer …</code>). It is saved in the browser and sent with generate requests. If empty, the server may use **<code class="inline">GOSI_BRAIN_AUTHORIZATION_TOKEN</code>** from environment variables instead.</p>
+<hr />
+<h2>4. Tabs overview</h2>
+<p>| Tab | Purpose |</p>
+<p>|-----|---------|</p>
+<p>| **Manual** | Type or paste steps yourself. |</p>
+<p>| **CSV** | Import steps from a CSV file (simple rows or multi test-case export). |</p>
+<p>| **Jira** | Fetch steps from a Jira issue description (optional credentials). |</p>
+<p>| **Record** | Capture a Web flow in a real Chromium window on the **backend machine**; produces a Playwright-style script and locator lines. |</p>
+<p>**Note:** **Record** is disabled when **Platform** is **Mobile** — recording uses Web-only Playwright.</p>
+<hr />
+<h2>5. Shared fields (below every tab)</h2>
+<p>These apply whichever tab is selected.</p>
+<h3>Platform</h3>
+<ul>
+<li>**Web (WebUI)** — Standard browser automation keywords.</li>
+<li>**Mobile (Mobile)** — Requires **Appium** running locally (see section 10).</li>
+</ul>
+<h3>Gosi Brain model</h3>
+<p>Choose the model exposed by your server configuration (default is shown in the dropdown).</p>
+<h3>Test case name (optional)</h3>
+<p>Used when naming or exporting the generated test case. Leave blank if you do not need a fixed name.</p>
+<h3>Katalon project path (for export)</h3>
+<p>Absolute path to your **Katalon Studio project folder** on **your PC** (must contain a **<code class="inline">Test Cases</code>** directory). Used by **Add to Katalon Project** — this writes files **locally**, not on the server.</p>
+<h3>Format / style pass</h3>
+<ul>
+<li>**None** — Minimal post-processing.</li>
+<li>**Simplify layout** — Cleans up formatting after generation.</li>
+<li>**Match project style** — Adjusts wording/layout toward your project context.</li>
+</ul>
+<h3>Locators</h3>
+<p>One line per mapping, for example:</p>
+<pre class="code"><code data-lang="text">Login button = #submit-login
+Username field = input[name=&#39;user&#39;]</code></pre>
+<p>Names can align with steps so the compiler resolves targets. Manual lines **take priority** when merged with auto-detected lines.</p>
+<h3>Auto convert before generate</h3>
+<p>When enabled, Playwright/Selenium/Cypress-style locator lines are converted to **Katalon CSS/XPath** before generation.</p>
+<p>Use **Convert to Katalon Locators** to preview the conversion table without generating yet.</p>
+<h3>Page URL (preview &amp; auto-detect for generate)</h3>
+<p>HTTPS URL of the page under test. Used by:</p>
+<ul>
+<li>**Preview locators from URL** — fills the read-only Playwright-style preview panel.</li>
+<li>**Auto-detect for generate** — server visits the URL and merges detected locator candidates into generation (manual locators still win on conflicts).</li>
+</ul>
+<h3>Page language (Playwright extraction)</h3>
+<p>**Auto**, **English**, or **Arabic** — influences browser locale when extracting locators from the Page URL.</p>
+<h3>Auto-detect for generate</h3>
+<p>When checked (and Page URL is filled), the backend pulls locator candidates from the live page during **Generate**. Requires a backend with working **Playwright + Chromium** (set **<code class="inline">PLAYWRIGHT_BROWSERS_PATH</code>** on hosts like Render so browsers persist after build).</p>
+<h3>Stream response (live typing)</h3>
+<p>Streams tokens into the Groovy panel during generation instead of waiting for one response.</p>
+<hr />
+<h2>6. Manual tab</h2>
+<p>1. Enter **test steps**, **one per line**.</p>
+<p>2. Optionally fill **Locators**, **Page URL**, enable **Auto-detect**, etc.</p>
+<p>3. Click **Generate Katalon Groovy**.</p>
+<p>**Tip:** Clear step-specific wording (“Click Login”, “Type password”) helps the compiler.</p>
+<hr />
+<h2>7. CSV tab</h2>
+<h3>Upload</h3>
+<p>Choose a <code class="inline">.csv</code> file. The parser detects two shapes:</p>
+<h3>Simple format</h3>
+<p>Columns similar to **<code class="inline">Step</code>** and **<code class="inline">Description</code>** — each row becomes step text used for generation.</p>
+<h3>Test-case export format</h3>
+<p>Multiple test cases with a **<code class="inline">Steps</code>** column (for example Zephyr/VIC-style exports). Expected-result suffixes such as **<code class="inline">| Expected: …</code>** are stripped.</p>
+<p>After load:</p>
+<ul>
+<li>Use **Select all** / **Clear all** and row checkboxes to choose which test cases contribute steps.</li>
+<li>The status line shows how many steps will be sent to **Generate**.</li>
+</ul>
+<h3>Generate</h3>
+<p>Stay on CSV after selection and click **Generate Katalon Groovy** — steps come from selected rows.</p>
+<hr />
+<h2>8. Jira tab</h2>
+<h3>Credentials (optional)</h3>
+<ul>
+<li>**Jira base URL** — Site root only, e.g. <code class="inline">https://your-domain.atlassian.net</code> or <code class="inline">https://jira.company.com</code>.</li>
+<li>**Email or username** — Atlassian Cloud uses email; Server/Data Center may use username.</li>
+<li>**Password, PAT, or API token** — Same combination you would use for Basic auth or PAT-only REST where configured.</li>
+</ul>
+<p>Leave all three empty to load **demo** steps only (nothing is stored on the server).</p>
+<h3>Buttons</h3>
+<ul>
+<li>**Test Jira login** — Calls **<code class="inline">GET /myself</code>** to verify URL and credentials without loading an issue.</li>
+<li>**Fetch from Jira** — Loads the issue and parses steps into the **Test steps from Jira** box.</li>
+</ul>
+<h3>Editing steps</h3>
+<p>Edit the textarea if needed — **Generate** uses exactly these lines while you remain on the **Jira** tab.</p>
+<h3>Troubleshooting</h3>
+<ul>
+<li>**401** — Wrong URL, user, or secret.</li>
+<li>**403** — Often blocked Basic auth or missing REST permission; try a **PAT** or ask your Jira admin.</li>
+</ul>
+<hr />
+<h2>9. Record tab (Web only)</h2>
+<p>Recording opens **Chromium on the machine running the backend**, not inside your laptop browser alone.</p>
+<p>1. Enter **URL to open**.</p>
+<p>2. Click **Record test flow** — interact with the browser window; finish via **Finish recording** on the page or wait for timeout.</p>
+<p>3. The **Playwright-style script** textarea fills; locator **<code class="inline">name = selector</code>** lines merge into **Locators**.</p>
+<p>4. Adjust locators if needed, then **Generate Katalon Groovy**.</p>
+<h3>Lossless replay</h3>
+<p>Check **Lossless replay** to minimise rewriting (preserve trace fidelity; skips some Groovy optimisers).</p>
+<h3>Stuck session</h3>
+<p>Use **Cancel recording on server** if you closed the browser or refreshed the UI while a session was active.</p>
+<h3>Paste-only workflow</h3>
+<p>You may paste an existing Playwright script instead of recording — still fill **URL** when the server needs it for locator extraction.</p>
+<hr />
+<h2>10. Mobile (Appium) panel</h2>
+<p>Shown when **Platform** is **Mobile**.</p>
+<p>1. Start **Appium** locally (default <code class="inline">http://127.0.0.1:4723</code>).</p>
+<p>2. Paste **Capabilities** as JSON matching your device/emulator.</p>
+<p>3. **Check Appium** — Verifies connectivity.</p>
+<p>4. **Start session** — Opens an Appium session.</p>
+<p>5. **Extract locators** — Reads page source and fills locator suggestions into **Locators**.</p>
+<p>6. **Stop session** — Ends the session.</p>
+<h3>Mobile recording proxy</h3>
+<p>**Start Recording** / **Stop Recording** uses a proxy URL shown in the hint — use it **only** in Appium Inspector or another client as directed; **do not** replace the main Appium URL field used for extract/stop.</p>
+<p>**Apply to Steps+Locators** moves captured commands into Manual-oriented steps when recording stopped.</p>
+<hr />
+<h2>11. Output panel</h2>
+<ul>
+<li>**Clear** — Clears generated Groovy text.</li>
+<li>**Copy** — Copies script to clipboard.</li>
+<li>**Add to Katalon Project** — Writes under **Test Cases** using **Katalon project path** (local disk).</li>
+<li>**Download .groovy** — Downloads the script file.</li>
+</ul>
+<p>Lint warnings may appear below when the server validates Groovy.</p>
+<hr />
+<h2>12. History</h2>
+<p>Past generations may appear in **History** — click an entry to reload steps and script into the workspace.</p>
+<hr />
+<h2>13. Quick checklist before Generate</h2>
+<ul>
+<li>Backend reachable (**Gosi Brain: ready**).</li>
+<li>Valid bearer token if your deployment requires it (or server env fallback configured).</li>
+<li>Steps present **or** Record tab has script/URL as required.</li>
+<li>Locators filled or **Auto-detect** + **Page URL** if you rely on automatic mapping.</li>
+<li>**Playwright features** only work where Chromium is installed on the backend (<code class="inline">npx playwright install chromium</code> during deploy and persistent browser path if applicable).</li>
+</ul>
+<hr />
+<h2>14. Support commands (maintainers)</h2>
+<p>From repository root:</p>
+<pre class="code"><code data-lang="bash">npm run docs:user-pdf</code></pre>
+<p>Rebuilds **<code class="inline">docs/USER_GUIDE.pdf</code>** from this Markdown file (requires Playwright/Chromium locally).</p>
+</body>
+</html>

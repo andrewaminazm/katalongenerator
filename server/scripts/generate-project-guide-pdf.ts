@@ -121,13 +121,14 @@ function inlineMd(s: string): string {
   return escaped.replace(/`([^`]+)`/g, (_m, g1) => `<code class="inline">${escapeHtml(g1)}</code>`);
 }
 
-function wrapHtml(bodyHtml: string): string {
+function wrapHtml(bodyHtml: string, documentTitle: string): string {
+  const safeTitle = escapeHtml(documentTitle);
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Project Guide — Katalon Script Generator</title>
+  <title>${safeTitle}</title>
   <style>
     :root {
       --fg: #111827;
@@ -185,12 +186,26 @@ ${bodyHtml}
 
 async function main() {
   const repoRoot = path.resolve(import.meta.dirname, "..", "..");
-  const mdPath = path.resolve(repoRoot, "docs", "PROJECT_GUIDE.md");
-  const htmlPath = path.resolve(repoRoot, "docs", "PROJECT_GUIDE.html");
-  const pdfPath = path.resolve(repoRoot, "docs", "PROJECT_GUIDE.pdf");
+  const docBase =
+    process.argv[2]?.trim().replace(/\.md$/i, "").replace(/\.pdf$/i, "") || "PROJECT_GUIDE";
+  const mdPath = path.resolve(repoRoot, "docs", `${docBase}.md`);
+  const htmlPath = path.resolve(repoRoot, "docs", `${docBase}.html`);
+  const pdfPath = path.resolve(repoRoot, "docs", `${docBase}.pdf`);
+
+  if (!fs.existsSync(mdPath)) {
+    console.error(`Markdown file not found: ${mdPath}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const titles: Record<string, string> = {
+    PROJECT_GUIDE: "Project Guide — Katalon Script Generator",
+    USER_GUIDE: "User Guide — Katalon Script Generator",
+  };
+  const documentTitle = titles[docBase] ?? `${docBase} — Katalon Script Generator`;
 
   const md = fs.readFileSync(mdPath, "utf8");
-  const html = wrapHtml(mdToHtml(md));
+  const html = wrapHtml(mdToHtml(md), documentTitle);
   fs.writeFileSync(htmlPath, html, "utf8");
 
   const browser = await chromium.launch();
@@ -208,7 +223,7 @@ async function main() {
   });
 
   await browser.close();
-  console.log(`Wrote ${path.relative(repoRoot, pdfPath)}`);
+  console.log(`Wrote ${path.relative(repoRoot, pdfPath)} (from ${path.relative(repoRoot, mdPath)})`);
 }
 
 main().catch((err) => {

@@ -9,7 +9,8 @@
     "dev": "concurrently -n server,client -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix server && npm run build --prefix client",
     "build:netlify": "npm run build --prefix server && npm run build --prefix client",
-    "docs:pdf": "npm run docs:pdf --prefix server"
+    "docs:pdf": "npm run docs:pdf --prefix server",
+    "docs:user-pdf": "npm run docs:user-pdf --prefix server"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
