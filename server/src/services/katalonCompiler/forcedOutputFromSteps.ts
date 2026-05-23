@@ -283,6 +283,7 @@ export async function generateForcedOutputFromSteps(
   }
 
   let code: string;
+  let wrappedAsKeyword = false;
   if (userMode === "page_object") {
     code = wrapBodyAsPageObject({ subject, bodyLines, methodName });
   } else if (
@@ -342,10 +343,11 @@ export async function generateForcedOutputFromSteps(
       bodyLines,
       methodName,
     });
+    wrappedAsKeyword = true;
   }
 
   const className = classNameForWrapMode(userMode, subject);
-  const isKeyword = userMode === "custom_keyword";
+  const isKeyword = wrappedAsKeyword;
   const v = isKeyword
     ? validateKeywordTemplateGroovy(code, { allowOpenBrowser: true })
     : validateGroovyUtilityAst(code);

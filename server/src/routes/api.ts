@@ -248,9 +248,7 @@ async function finishSpecializedGeneration(
     compilerWarnings: routed.warnings,
     deterministic: true,
     generationMode: routed.generationMode,
-    ...(routed.keywordTemplate?.keywordTemplate
-      ? { keywordTemplate: routed.keywordTemplate.keywordTemplate }
-      : {}),
+    ...(routed.keywordTemplate ? { keywordTemplate: routed.keywordTemplate } : {}),
     ...(routed.groovyUtility ? { groovyUtility: routed.groovyUtility } : {}),
     ...aiMemoryResponseExtras(code, aiMemoryMode, memoryContext),
     ...healingPayload(body),
@@ -1183,7 +1181,6 @@ export function createApiRouter(): express.Router {
         const modeAnalysis = analyzeGenerationMode(steps, userGenMode);
         if (
           (modeAnalysis.mode === "groovy_utility" || modeAnalysis.mode === "keyword_template") &&
-          modeAnalysis.mode !== "forced_wrap" &&
           !modeAnalysis.forcedWrapMode
         ) {
           const projectHint =

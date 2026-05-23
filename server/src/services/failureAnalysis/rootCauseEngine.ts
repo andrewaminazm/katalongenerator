@@ -107,7 +107,7 @@ export function buildRootCause(params: {
     severity = "high";
   }
 
-  const reproducibility: Reproducibility =
+  const reproducibility: RootCauseResult["reproducibility"] =
     params.flakyIndicators.length >= 2 ? "intermittent" : params.failureType === "ENVIRONMENT" ? "intermittent" : "likely";
 
   return {

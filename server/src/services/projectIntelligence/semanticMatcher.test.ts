@@ -81,11 +81,28 @@ describe("buildGenerationPlan locator binding", () => {
     const index: ProjectIndex = {
       projectId: "test",
       projectName: "test",
+      uploadDate: new Date().toISOString(),
+      sourceType: "folder",
       testObjects: objects,
       keywords: [],
       testScripts: [],
       testCases: [],
-      stats: { testObjects: objects.length, keywords: 0, testScripts: 0 },
+      testSuitePaths: [],
+      profilePaths: [],
+      globalVariableHints: [],
+      reusableFlows: [],
+      graph: { nodes: [], edges: [] },
+      codingStyleHints: [],
+      stats: {
+        testObjects: objects.length,
+        keywords: 0,
+        keywordMethods: 0,
+        testScripts: 0,
+        testSuites: 0,
+        profiles: 0,
+        groovyLibs: 0,
+        parseErrors: 0,
+      },
     };
     const plan = buildGenerationPlan([step], index, "balanced", "web");
     const binding = bindingsByStepIndex(plan)[0];

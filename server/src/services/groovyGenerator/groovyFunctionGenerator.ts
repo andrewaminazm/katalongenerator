@@ -1,5 +1,6 @@
 import type { GroovyUtilityIntent } from "../testDsl/groovyUtilityIntent.js";
 import type { ParsedKeywordClass } from "../projectIntelligence/types.js";
+import type { ArchitectureFeatures } from "../groovyArchitecture/types.js";
 import { compileArchitectureGroovy } from "../groovyArchitecture/groovyFunctionGenerator.js";
 import { validateGroovyUtilityAst } from "./groovyAstValidator.js";
 import { buildUtilityMetadata, formatGroovyUtility } from "./groovyClassBuilder.js";
@@ -37,7 +38,7 @@ export interface GroovyUtilityCompileResult {
   };
   architecture?: {
     componentKind?: string;
-    features?: Record<string, boolean>;
+    features?: ArchitectureFeatures;
     buildersUsed?: string[];
   };
 }

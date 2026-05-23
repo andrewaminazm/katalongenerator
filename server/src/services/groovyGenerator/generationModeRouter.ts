@@ -15,7 +15,10 @@ import {
   looksLikeTestStepLine,
   type GroovyUtilityIntent,
 } from "../testDsl/groovyUtilityIntent.js";
-import { generateKeywordTemplateFromSteps } from "../katalonCompiler/keywordGenerationRouter.js";
+import {
+  generateKeywordTemplateFromSteps,
+  type KeywordTemplateGenerateResult,
+} from "../katalonCompiler/keywordGenerationRouter.js";
 import { generateForcedOutputFromSteps } from "../katalonCompiler/forcedOutputFromSteps.js";
 import { compileGroovyUtility, type GroovyUtilityCompileResult } from "./groovyFunctionGenerator.js";
 import { compileKatalonScript } from "../katalonCompiler/index.js";
@@ -87,7 +90,10 @@ export function analyzeGenerationMode(
 
   const keywordIntents = trimmed
     .map((s) => detectCreateKeywordIntent(s))
-    .filter((k) => k !== null && k.confidence >= KEYWORD_CREATE_CONFIDENCE_THRESHOLD);
+    .filter(
+      (k): k is CreateKeywordIntent =>
+        k !== null && k.confidence >= KEYWORD_CREATE_CONFIDENCE_THRESHOLD
+    );
 
   const utilityLines = trimmed.filter((s) => detectGroovyUtilityIntent(s));
   const keywordLines = trimmed.filter((s) => detectCreateKeywordIntent(s));
@@ -216,7 +222,9 @@ export function analyzeGenerationMode(
       mode: "keyword_template",
       confidence: keywordIntents[0]!.confidence,
       utilityIntents: [],
-      keywordIntent: keywordIntents.reduce((a, b) => (b.confidence > a.confidence ? b : a)),
+      keywordIntent: keywordIntents.reduce((best, cur) =>
+        cur.confidence > best.confidence ? cur : best
+      ),
       testStepLines: [],
       utilityStepLines: [],
     };
@@ -227,7 +235,7 @@ export function analyzeGenerationMode(
       mode: "mixed_fallback",
       confidence: utilityIntents[0]?.confidence ?? 0,
       utilityIntents,
-      keywordIntent: keywordIntents[0],
+      keywordIntent: keywordIntents[0] ?? undefined,
       testStepLines: trimmed,
       utilityStepLines: utilityLines,
     };
@@ -254,7 +262,7 @@ export interface RoutedGenerateResult {
   warnings?: string[];
   validationErrors?: string[];
   validationStage?: "groovy";
-  keywordTemplate?: ReturnType<typeof generateKeywordTemplateFromSteps>;
+  keywordTemplate?: KeywordTemplateGenerateResult["keywordTemplate"];
   groovyUtility?: GroovyUtilityCompileResult["groovyUtility"];
 }
 
@@ -372,7 +380,8 @@ export async function routeSpecializedGeneration(params: {
         model: testCompiled.model,
         warnings: [...util.warnings, ...testCompiled.warnings],
         validationErrors: testCompiled.validationErrors,
-        validationStage: testCompiled.validationStage,
+        validationStage:
+          testCompiled.validationStage === "groovy" ? "groovy" : undefined,
       };
     }
     return {

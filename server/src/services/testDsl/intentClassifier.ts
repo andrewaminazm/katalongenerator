@@ -17,7 +17,8 @@ export type DslAction =
   | "uncheck"
   | "callKeyword"
   | "comment"
-  | "createKeyword";
+  | "createKeyword"
+  | "generateUtility";
 
 /** High-level QA intent (compiler / reporting). */
 export type SemanticIntentKind = "navigation" | "interaction" | "input" | "validation" | "system";

@@ -35,8 +35,7 @@ export async function buildOrchestratorContext(
   if (!index) return ctx;
 
   if (!ctx.projectDefaultUrl) {
-    const scripts = index.testScripts ?? index.testCases ?? [];
-    ctx.projectDefaultUrl = extractProjectDefaultUrl(scripts) ?? undefined;
+    ctx.projectDefaultUrl = await extractProjectDefaultUrl(input.projectId);
   }
 
   const memoryMode = resolveAiMemoryMode(input.aiMemoryMode);
