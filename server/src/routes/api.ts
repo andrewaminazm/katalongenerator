@@ -46,6 +46,32 @@ import { matchStepsToOr, formatOrSuggestionsForPrompt } from "../services/orMatc
 import { extractOrPathsFromLocatorLines } from "../services/locatorPaths.js";
 import { lintGroovy, normalizeKatalonWebGroovy, simplifyGroovyFormatting } from "../services/groovyLint.js";
 import { compileKatalonScript } from "../services/katalonCompiler/index.js";
+import {
+  analyzeGenerationMode,
+  routeSpecializedGeneration,
+  type UserGenerationMode,
+} from "../services/groovyGenerator/generationModeRouter.js";
+import {
+  loadProjectIndex,
+} from "../services/projectIntelligence/index.js";
+import {
+  bindingsByStepIndex,
+  buildGenerationPlan,
+  enrichLocatorsFromSteps,
+  mergeLocatorTextWithPlan,
+} from "../services/projectIntelligence/generationPlanner.js";
+import { extractProjectDefaultUrl } from "../services/projectIntelligence/projectUrlResolver.js";
+import { extractKeywordRefFromStep } from "../services/projectIntelligence/stepReferenceExtractor.js";
+import type { ProjectGenerationMode } from "../services/projectIntelligence/types.js";
+import type { ProjectIndex } from "../services/projectIntelligence/types.js";
+import {
+  buildMemoryContextForGeneration,
+  computeStyleMatchReport,
+  resolveAiMemoryMode,
+  shouldInjectMemory,
+  type AiMemoryMode,
+} from "../services/aiMemory/index.js";
+import type { GenerationStyleContext } from "../services/aiMemory/types.js";
 import { autoFixGroovy } from "../services/katalonCompiler/autoFixEngine.js";
 import { validateKatalonGroovy } from "../services/katalonCompiler/validationLayer.js";
 import { convertLocatorLines } from "../services/katalonCompiler/universalLocatorConverter.js";
@@ -84,6 +110,9 @@ import {
   convertCommandsToMobileArtifacts,
   type AppiumProxyRecording,
 } from "../services/mobile/appiumRecordProxy.js";
+import { isGosiBrainConfigured, gosiBrainConfigHint } from "../loadEnv.js";
+import { runOrchestration } from "../services/aiOrchestrator/index.js";
+import type { OrchestrationMode } from "../services/aiOrchestrator/types.js";
 import type {
   GenerateRequestBody,
   LlmProvider,
@@ -124,6 +153,109 @@ function normalizeSteps(body: GenerateRequestBody): string[] {
   const raw = body.steps;
   if (!Array.isArray(raw)) return [];
   return raw.map((s) => String(s).trim()).filter(Boolean);
+}
+
+function parseUserGenerationMode(raw: unknown): UserGenerationMode {
+  const allowed: UserGenerationMode[] = [
+    "auto",
+    "test_script",
+    "custom_keyword",
+    "groovy_function",
+    "utility_class",
+    "framework_helper",
+    "page_object",
+    "api_helper",
+    "db_utility",
+    "framework_service",
+  ];
+  if (typeof raw === "string" && (allowed as string[]).includes(raw)) {
+    return raw as UserGenerationMode;
+  }
+  return "auto";
+}
+
+function aiMemoryResponseExtras(
+  code: string,
+  mode: AiMemoryMode,
+  memoryContext: GenerationStyleContext | null
+): Record<string, unknown> {
+  if (!memoryContext || mode === "disabled" || mode === "learn_only") {
+    return mode !== "disabled" ? { aiMemory: { mode } } : {};
+  }
+  const styleMatch = computeStyleMatchReport(code, memoryContext.profile);
+  return {
+    aiMemory: { mode, styleMatch },
+    ...(memoryContext.styleMatchHints.length > 0
+      ? { aiMemorySuggestions: memoryContext.styleMatchHints }
+      : {}),
+  };
+}
+
+async function finishSpecializedGeneration(
+  res: express.Response,
+  body: GenerateRequestBody,
+  platform: Platform,
+  steps: string[],
+  routed: Awaited<ReturnType<typeof routeSpecializedGeneration>>,
+  memoryContext: GenerationStyleContext | null = null,
+  aiMemoryMode: AiMemoryMode = "disabled"
+): Promise<boolean> {
+  if (!routed.handled) return false;
+  if (routed.validationErrors && routed.validationErrors.length > 0) {
+    res.status(422).json({
+      error: "Generated code failed validation (see validationErrors).",
+      validationErrors: routed.validationErrors,
+      validationStage: routed.validationStage,
+      generationMode: routed.generationMode,
+      compilerWarnings: routed.warnings,
+    });
+    return true;
+  }
+  let code = routed.code ?? "";
+  if (body.stylePass === "simplify") {
+    code = simplifyGroovyFormatting(code);
+  }
+  const isUtility =
+    routed.generationMode === "groovy_utility" || routed.generationMode === "hybrid";
+  const lint = lintGroovy(code, new Set(), {
+    platform,
+    keywordTemplate: routed.generationMode === "keyword_template",
+    groovyUtility: isUtility,
+  });
+  try {
+    await appendHistory({
+      platform,
+      model: routed.model ?? "specialized",
+      testCaseName: body.testCaseName,
+      stepsPreview: steps.join(" | ").slice(0, 200),
+      code,
+    });
+  } catch (histErr) {
+    console.warn("[generate] history append failed (specialized):", histErr);
+  }
+  if (body.stream) {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache");
+    res.write(code);
+    res.end();
+    return true;
+  }
+  res.json({
+    code,
+    model: routed.model,
+    platform,
+    lint,
+    compilerWarnings: routed.warnings,
+    deterministic: true,
+    generationMode: routed.generationMode,
+    ...(routed.keywordTemplate?.keywordTemplate
+      ? { keywordTemplate: routed.keywordTemplate.keywordTemplate }
+      : {}),
+    ...(routed.groovyUtility ? { groovyUtility: routed.groovyUtility } : {}),
+    ...aiMemoryResponseExtras(code, aiMemoryMode, memoryContext),
+    ...healingPayload(body),
+  });
+  return true;
 }
 
 /** Record mode defaults to lossless replay unless the client explicitly sets false. */
@@ -324,14 +456,19 @@ let activeMobileRecording: AppiumProxyRecording | null = null;
 export function createApiRouter(): express.Router {
   const router = express.Router();
 
-  router.get("/health", (_req, res) => {
-    const gosiBrainConfigured = Boolean(
-      process.env.GOSI_BRAIN_CHAT_URL?.trim() && process.env.GOSI_BRAIN_API_KEY?.trim()
-    );
+  router.get("/health", (req, res) => {
+    const gosiBrainConfigured = isGosiBrainConfigured();
+    const apiBase =
+      typeof req.get("x-forwarded-host") === "string"
+        ? `https://${req.get("x-forwarded-host")}`
+        : "";
     res.json({
       ok: true,
       gosiBrainConfigured,
       defaultGosiBrainModel: DEFAULT_GOSI_BRAIN_MODEL,
+      ...(gosiBrainConfigured
+        ? {}
+        : { gosiConfigHint: gosiBrainConfigHint(apiBase) }),
     });
   });
 
@@ -660,6 +797,69 @@ export function createApiRouter(): express.Router {
     }
   });
 
+  router.post("/orchestrate", async (req, res, next) => {
+    try {
+      const body = req.body as GenerateRequestBody & { prompt?: string };
+      const platform = body.platform;
+      if (!validatePlatform(platform)) {
+        res.status(400).json({ error: "platform must be 'web' or 'mobile'" });
+        return;
+      }
+      const steps = normalizeSteps(body);
+      const prompt =
+        (typeof body.prompt === "string" && body.prompt.trim()) ||
+        steps.join("\n") ||
+        "";
+      if (!prompt.trim()) {
+        res.status(400).json({ error: "prompt or steps are required" });
+        return;
+      }
+      const rawBody = req.body as Record<string, unknown>;
+      const authorizationToken =
+        typeof rawBody.authorization_token === "string" && rawBody.authorization_token.trim()
+          ? rawBody.authorization_token.trim()
+          : (process.env.GOSI_BRAIN_AUTHORIZATION_TOKEN?.trim() ?? undefined);
+
+      const result = await runOrchestration({
+        platform,
+        prompt,
+        steps,
+        locators: body.locators,
+        url: body.url,
+        projectId: body.projectId,
+        projectGenerationMode: body.projectGenerationMode,
+        codeGenerationMode: body.codeGenerationMode,
+        aiMemoryMode: body.aiMemoryMode,
+        orchestrationMode: (body.orchestrationMode ?? "advanced") as OrchestrationMode,
+        deterministicCompiler: body.deterministicCompiler,
+        authorizationToken,
+        model: body.model,
+        testCaseName: body.testCaseName,
+        stylePass: body.stylePass,
+      });
+
+      res.json({
+        code: result.code,
+        model: result.model,
+        ok: result.ok,
+        intent: result.intent,
+        plan: result.plan,
+        artifacts: result.artifacts,
+        warnings: result.warnings,
+        lint: result.lint,
+        confidence: result.confidence,
+        orchestration: result.orchestration,
+        conversationalResponse: result.conversationalResponse,
+        suggestions: result.suggestions,
+        generationMode: result.generationMode,
+        groovyUtility: result.groovyUtility,
+        keywordTemplate: result.keywordTemplate,
+      });
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.post("/generate", async (req, res, next) => {
     try {
       const body = req.body as GenerateRequestBody;
@@ -675,6 +875,62 @@ export function createApiRouter(): express.Router {
       }
 
       let steps = normalizeSteps(body);
+
+      if (body.orchestrationMode) {
+        const prompt =
+          (typeof body.prompt === "string" && body.prompt.trim()) ||
+          steps.join("\n") ||
+          "";
+        if (!prompt.trim()) {
+          res.status(400).json({ error: "prompt or steps are required when orchestrationMode is set" });
+          return;
+        }
+        const rawBody = req.body as Record<string, unknown>;
+        const authorizationToken =
+          typeof rawBody.authorization_token === "string" && rawBody.authorization_token.trim()
+            ? rawBody.authorization_token.trim()
+            : (process.env.GOSI_BRAIN_AUTHORIZATION_TOKEN?.trim() ?? undefined);
+        const orch = await runOrchestration({
+          platform,
+          prompt,
+          steps,
+          locators: body.locators,
+          url: body.url,
+          projectId: body.projectId,
+          projectGenerationMode: body.projectGenerationMode,
+          codeGenerationMode: body.codeGenerationMode,
+          aiMemoryMode: body.aiMemoryMode,
+          orchestrationMode: body.orchestrationMode as OrchestrationMode,
+          deterministicCompiler: body.deterministicCompiler,
+          authorizationToken,
+          model: body.model,
+          testCaseName: body.testCaseName,
+          stylePass: body.stylePass,
+        });
+        res.json({
+          code: orch.code,
+          model: orch.model,
+          platform,
+          lint: orch.lint,
+          compilerWarnings: orch.warnings,
+          deterministic: body.deterministicCompiler !== false,
+          orchestrator: {
+            ok: orch.ok,
+            intent: orch.intent,
+            plan: orch.plan,
+            confidence: orch.confidence,
+            orchestration: orch.orchestration,
+            conversationalResponse: orch.conversationalResponse,
+            suggestions: orch.suggestions,
+            artifacts: orch.artifacts,
+          },
+          ...(orch.generationMode ? { generationMode: orch.generationMode } : {}),
+          ...(orch.groovyUtility ? { groovyUtility: orch.groovyUtility } : {}),
+          ...(orch.keywordTemplate ? { keywordTemplate: orch.keywordTemplate } : {}),
+        });
+        return;
+      }
+
       let userLocatorsText = body.locators ?? "";
       let recordedPlaywrightScript = body.recordedPlaywrightScript?.trim() ?? "";
       let skipSecondStepNormalizer = false;
@@ -796,10 +1052,29 @@ export function createApiRouter(): express.Router {
         return;
       }
 
+      const useDeterministicCompiler = body.deterministicCompiler !== false;
+      const userGenMode = parseUserGenerationMode(body.codeGenerationMode);
+      const gosiTokenEarly = resolveGosiAuthorizationToken(body);
+
+      let projectDefaultUrl: string | undefined;
+      const projectIdForUrl = body.projectId?.trim();
+      if (projectIdForUrl) {
+        try {
+          projectDefaultUrl = await extractProjectDefaultUrl(projectIdForUrl);
+        } catch (urlErr) {
+          console.warn("[generate] project default URL extraction failed:", urlErr);
+        }
+      }
+
       // Universal Test Step Intelligence: normalize → repair → validate → intent completion
       // (Skip if steps already came from Playwright → DSL pipeline above.)
       if (!skipSecondStepNormalizer) {
-        const normalized = runUniversalTestStepIntelligence({ input: steps, platform });
+        const stepsBeforeNormalize = steps.slice();
+        const normalized = runUniversalTestStepIntelligence({
+          input: steps,
+          platform,
+          projectDefaultUrl,
+        });
         if (normalized.errors.length > 0) {
           res.status(422).json({
             error: "Steps could not be safely normalized into the Test DSL (no guessing).",
@@ -809,7 +1084,13 @@ export function createApiRouter(): express.Router {
           });
           return;
         }
-        steps = normalized.canonicalSteps;
+        steps = normalized.canonicalSteps.map((canonical, i) => {
+          const original = stepsBeforeNormalize[i];
+          if (original && extractKeywordRefFromStep(original)) {
+            return original.trim();
+          }
+          return canonical;
+        });
       }
 
       let autoLocatorsText = "";
@@ -832,8 +1113,110 @@ export function createApiRouter(): express.Router {
         autoLocatorsText = sa.text;
         locatorSanitizeWarnings = [...su.warnings, ...sa.warnings];
       }
-      const mergedLocators = mergeLocatorTexts(userLocatorsText, autoLocatorsText);
-      const useDeterministicCompiler = body.deterministicCompiler !== false;
+      let mergedLocators = mergeLocatorTexts(userLocatorsText, autoLocatorsText);
+      mergedLocators = enrichLocatorsFromSteps(mergedLocators, steps, platform);
+      let projectIntelligencePlan: ReturnType<typeof buildGenerationPlan> | undefined;
+      let projectBindings: Record<number, { orPath?: string; orLabel?: string; keywordCall?: string }> | undefined;
+      let projectKeywordsForCompile: import("../services/projectIntelligence/types.js").ParsedKeywordClass[] | undefined;
+      let memoryContext: GenerationStyleContext | null = null;
+      const projectId = body.projectId?.trim();
+      const aiMemoryMode = resolveAiMemoryMode(
+        body.aiMemoryMode ?? (projectId ? "learn_suggest" : "disabled")
+      );
+
+      if (projectId) {
+        const index = await loadProjectIndex(projectId);
+        if (!index) {
+          res.status(404).json({ error: `Project not found: ${projectId}` });
+          return;
+        }
+        const mode: ProjectGenerationMode =
+          body.projectGenerationMode === "strict_reuse" ||
+          body.projectGenerationMode === "generate_everything"
+            ? body.projectGenerationMode
+            : "balanced";
+        projectKeywordsForCompile = index.keywords;
+        if (!projectDefaultUrl) {
+          try {
+            projectDefaultUrl = await extractProjectDefaultUrl(projectId);
+          } catch {
+            /* optional */
+          }
+        }
+        const compileDefaultUrl =
+          body.url?.trim() || projectDefaultUrl?.trim() || undefined;
+        projectIntelligencePlan = buildGenerationPlan(steps, index, mode, platform, {
+          defaultUrl: compileDefaultUrl,
+          projectDefaultUrl: projectDefaultUrl?.trim(),
+        });
+        mergedLocators = mergeLocatorTextWithPlan(mergedLocators, projectIntelligencePlan);
+        const rawBindings = bindingsByStepIndex(projectIntelligencePlan);
+        projectBindings = {};
+        for (const [k, v] of Object.entries(rawBindings)) {
+          const idx = Number(k);
+          if (!Number.isFinite(idx)) continue;
+          projectBindings[idx] = {
+            orPath: v.orPath,
+            orLabel: v.orLabel,
+            keywordCall: v.keywordCall,
+          };
+        }
+
+        memoryContext = await buildMemoryContextForGeneration(
+          projectId,
+          steps,
+          index,
+          aiMemoryMode
+        );
+        if (memoryContext && projectIntelligencePlan) {
+          projectIntelligencePlan.suggestions = [
+            ...(projectIntelligencePlan.suggestions ?? []),
+            ...memoryContext.styleMatchHints,
+          ];
+        }
+        if (memoryContext && shouldInjectMemory(aiMemoryMode)) {
+          promptExtras.aiMemoryInjection = memoryContext.injectionText;
+        }
+      }
+
+      if (useDeterministicCompiler) {
+        const modeAnalysis = analyzeGenerationMode(steps, userGenMode);
+        if (
+          (modeAnalysis.mode === "groovy_utility" || modeAnalysis.mode === "keyword_template") &&
+          modeAnalysis.mode !== "forced_wrap" &&
+          !modeAnalysis.forcedWrapMode
+        ) {
+          const projectHint =
+            projectKeywordsForCompile?.length &&
+            projectKeywordsForCompile
+              .map((k) => `Existing keyword class: ${k.customKeywordsPath}`)
+              .slice(0, 12)
+              .join("\n");
+          const earlyRouted = await routeSpecializedGeneration({
+            steps,
+            userMode: userGenMode,
+            platform,
+            authorizationToken: gosiTokenEarly ?? undefined,
+            model: body.model,
+            projectHint: projectHint || undefined,
+            aiMemoryInjection: promptExtras.aiMemoryInjection,
+            projectKeywords: projectKeywordsForCompile,
+          });
+          if (
+            await finishSpecializedGeneration(
+              res,
+              body,
+              platform,
+              steps,
+              earlyRouted,
+              memoryContext,
+              aiMemoryMode
+            )
+          ) {
+            return;
+          }
+        }
+      }
 
       if (preserveRecordingFidelity && pipelineDsl && pipelineDsl.length > 0 && platform === "web") {
         selectorTraceReport = validateDslSelectorsTraceableInLocatorText(pipelineDsl, mergedLocators);
@@ -874,17 +1257,93 @@ export function createApiRouter(): express.Router {
                 typeof s.context?.selector === "string" ? s.context.selector.trim() : undefined
               )
             : undefined;
-        const compiled = compileKatalonScript({
+        const compileDefaultUrl =
+          body.url?.trim() || projectDefaultUrl?.trim() || undefined;
+        const compileInput = {
           platform,
           steps,
           locatorsText: mergedLocators,
-          url: body.url?.trim(),
+          url: compileDefaultUrl,
           testCaseName: body.testCaseName,
           ...(selectorByTestObjectLabel && Object.keys(selectorByTestObjectLabel).length > 0
             ? { selectorByTestObjectLabel }
             : {}),
           ...(playwrightContextSelectors ? { playwrightContextSelectors } : {}),
-        });
+          ...(projectBindings && Object.keys(projectBindings).length > 0
+            ? { projectBindingsByStepIndex: projectBindings }
+            : {}),
+          ...(projectKeywordsForCompile?.length
+            ? { projectKeywords: projectKeywordsForCompile }
+            : {}),
+        };
+
+        const hybridAnalysis = analyzeGenerationMode(steps, userGenMode);
+        if (hybridAnalysis.mode === "forced_wrap" && hybridAnalysis.forcedWrapMode) {
+          const projectHint =
+            projectKeywordsForCompile?.length &&
+            projectKeywordsForCompile
+              .map((k) => `Existing keyword class: ${k.customKeywordsPath}`)
+              .slice(0, 12)
+              .join("\n");
+          const forcedRouted = await routeSpecializedGeneration({
+            steps,
+            userMode: userGenMode,
+            platform,
+            authorizationToken: gosiTokenEarly ?? undefined,
+            model: body.model,
+            projectHint: projectHint || undefined,
+            aiMemoryInjection: promptExtras.aiMemoryInjection,
+            projectKeywords: projectKeywordsForCompile,
+            compileTestInput: compileInput,
+          });
+          if (
+            await finishSpecializedGeneration(
+              res,
+              body,
+              platform,
+              steps,
+              forcedRouted,
+              memoryContext,
+              aiMemoryMode
+            )
+          ) {
+            return;
+          }
+        }
+        if (hybridAnalysis.mode === "hybrid") {
+          const projectHint =
+            projectKeywordsForCompile?.length &&
+            projectKeywordsForCompile
+              .map((k) => `Existing keyword class: ${k.customKeywordsPath}`)
+              .slice(0, 12)
+              .join("\n");
+          const hybridRouted = await routeSpecializedGeneration({
+            steps,
+            userMode: userGenMode,
+            platform,
+            authorizationToken: gosiTokenEarly ?? undefined,
+            model: body.model,
+            projectHint: projectHint || undefined,
+            aiMemoryInjection: promptExtras.aiMemoryInjection,
+            projectKeywords: projectKeywordsForCompile,
+            compileTestInput: compileInput,
+          });
+          if (
+            await finishSpecializedGeneration(
+              res,
+              body,
+              platform,
+              steps,
+              hybridRouted,
+              memoryContext,
+              aiMemoryMode
+            )
+          ) {
+            return;
+          }
+        }
+
+        const compiled = compileKatalonScript(compileInput);
         if (compiled.validationErrors.length > 0) {
           const stage = compiled.validationStage;
           const message =
@@ -938,6 +1397,17 @@ export function createApiRouter(): express.Router {
           compilerWarnings: compiled.warnings,
           deterministic: true,
           ...(locatorSanitizeWarnings.length > 0 ? { locatorSanitizeWarnings } : {}),
+          ...(projectIntelligencePlan
+            ? {
+                projectIntelligence: {
+                  projectId: projectIntelligencePlan.projectId,
+                  mode: projectIntelligencePlan.mode,
+                  bindings: projectIntelligencePlan.bindings,
+                  warnings: projectIntelligencePlan.warnings,
+                  suggestions: projectIntelligencePlan.suggestions,
+                },
+              }
+            : {}),
           ...(selectorTraceReport?.warnings?.length
             ? { selectorTraceWarnings: selectorTraceReport.warnings }
             : {}),
@@ -952,6 +1422,7 @@ export function createApiRouter(): express.Router {
                 },
               }
             : {}),
+          ...aiMemoryResponseExtras(code, aiMemoryMode, memoryContext),
           ...healingPayload(body),
         });
         return;
@@ -1102,6 +1573,18 @@ export function createApiRouter(): express.Router {
                 ...(preserveRecordingFidelity && pipelineDsl?.length && platform === "web"
                   ? { selectorTraceability: true as const }
                   : {}),
+              },
+            }
+          : {}),
+        ...aiMemoryResponseExtras(code, aiMemoryMode, memoryContext),
+        ...(projectIntelligencePlan
+          ? {
+              projectIntelligence: {
+                projectId: projectIntelligencePlan.projectId,
+                mode: projectIntelligencePlan.mode,
+                bindings: projectIntelligencePlan.bindings,
+                warnings: projectIntelligencePlan.warnings,
+                suggestions: projectIntelligencePlan.suggestions,
               },
             }
           : {}),

@@ -15,14 +15,20 @@ export interface BoundParts {
 /**
  * Extracts values (quoted text, URLs, wait durations) without treating them as locators.
  */
-export function bindValues(action: string, raw: string): BoundParts {
+export function bindValues(
+  action: string,
+  raw: string,
+  opts?: { projectDefaultUrl?: string }
+): BoundParts {
   const s = raw.trim();
   const lower = s.toLowerCase();
   const q = extractQuoted(s);
   const url = detectUrl(s);
 
   if (action === "navigate") {
-    return { url: url ?? inferKnownSiteUrl(s) };
+    return {
+      url: url ?? inferKnownSiteUrl(s) ?? opts?.projectDefaultUrl?.trim(),
+    };
   }
 
   if (action === "wait") {

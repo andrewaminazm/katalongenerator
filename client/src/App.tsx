@@ -8,6 +8,7 @@ import {
   fetchJiraWhoami,
   generateCode,
   generateCodeStream,
+  defaultGosiConfigHint,
   healthCheck,
   parseCsv,
   type ConvertLocatorResultItem,
@@ -26,11 +27,28 @@ import {
   type LlmProvider,
   type Platform,
   type PlaywrightPageLocale,
+  type CodeGenerationMode,
+  type GenerationMode,
+  type ProjectGenerationMode,
   type StylePass,
 } from "./api";
+import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
+import { ActionWithTip, CheckboxTip, FieldBlock, TabWithTip, TipIcon, ToolbarBtn } from "./FieldTip";
+import { TIPS } from "./fieldTips";
+import {
+  HelpMenu,
+  OnboardingWizard,
+  ScriptPanelBody,
+  StepTemplatePicker,
+  useOnboardingWizard,
+} from "./Onboarding";
+import type { StepTemplate } from "./onboardingContent";
+import { FailureAnalyzerProvider } from "./components/AIFailureAnalyzer/FailureAnalyzerContext";
+import { FailureAnalyzerInput } from "./components/AIFailureAnalyzer/FailureAnalyzerInput";
+import { FailureAnalyzerResults } from "./components/AIFailureAnalyzer/FailureAnalyzerResults";
 import "./App.css";
 
-type InputTab = "manual" | "csv" | "jira" | "record";
+type InputTab = "manual" | "csv" | "jira" | "record" | "failure";
 
 /** Mobile WebView passes `?token=` once; we persist the Bearer value for /api/generate. */
 const GOSI_TOKEN_KEY = "katalon:gosi_token";
@@ -142,13 +160,17 @@ export default function App() {
   const [autoConvertBeforeGenerate, setAutoConvertBeforeGenerate] = useState(false);
   const [testCaseName, setTestCaseName] = useState("");
   const [katalonProjectPath, setKatalonProjectPath] = useState("");
+  const [activeProjectId, setActiveProjectId] = useState("");
+  const [projectGenerationMode, setProjectGenerationMode] =
+    useState<ProjectGenerationMode>("balanced");
   const [stylePass, setStylePass] = useState<StylePass>("none");
   const [useStream, setUseStream] = useState(false);
 
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [health, setHealth] = useState<string | null>(null);
+  const [gosiBrainReady, setGosiBrainReady] = useState<boolean | null>(null);
+  const [gosiConfigHint, setGosiConfigHint] = useState<string | null>(null);
   const [gosiToken, setGosiToken] = useState(() =>
     typeof window !== "undefined" ? localStorage.getItem(GOSI_TOKEN_KEY) ?? "" : ""
   );
@@ -156,6 +178,11 @@ export default function App() {
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [lint, setLint] = useState<LintIssue[] | null>(null);
+  const [generationMode, setGenerationMode] = useState<GenerationMode | null>(null);
+  const [codeGenerationMode, setCodeGenerationMode] = useState<CodeGenerationMode>("auto");
+  const [aiMemoryMode, setAiMemoryMode] = useState<
+    "disabled" | "learn_only" | "learn_suggest" | "adaptive"
+  >("learn_suggest");
   const [exportLoading, setExportLoading] = useState(false);
   const [exportResult, setExportResult] = useState<{ ok: boolean; message: string; path?: string } | null>(null);
   const [dark, setDark] = useState(() =>
@@ -209,13 +236,13 @@ export default function App() {
   useEffect(() => {
     healthCheck()
       .then((h) => {
-        setHealth(
-          h.gosiBrainConfigured === true
-            ? "ok"
-            : "missing-env"
-        );
+        setGosiBrainReady(h.gosiBrainConfigured === true);
+        setGosiConfigHint(h.gosiConfigHint ?? defaultGosiConfigHint());
       })
-      .catch(() => setHealth("unreachable"));
+      .catch(() => {
+        setGosiBrainReady(null);
+        setGosiConfigHint(null);
+      });
     loadHistory();
   }, [loadHistory]);
 
@@ -421,6 +448,7 @@ export default function App() {
     setLoading(true);
     setOutput("");
     setLint(null);
+    setGenerationMode(null);
     try {
       let locatorsForGenerate = locators;
       if (autoConvertBeforeGenerate) {
@@ -471,6 +499,10 @@ export default function App() {
               preserveRecordingFidelity,
             }
           : {}),
+        ...(activeProjectId
+          ? { projectId: activeProjectId, projectGenerationMode, aiMemoryMode }
+          : {}),
+        codeGenerationMode,
       };
       if (useStream) {
         setLint(null);
@@ -481,6 +513,7 @@ export default function App() {
         const r = await generateCode(payload);
         setOutput(r.code);
         setLint(r.lint ?? []);
+        setGenerationMode(r.generationMode ?? "test_case");
       }
       await loadHistory();
     } catch (err) {
@@ -750,6 +783,15 @@ export default function App() {
     }
   };
 
+  const { wizardOpen, openWizard, closeWizard } = useOnboardingWizard();
+
+  const onApplyStepTemplate = (template: StepTemplate) => {
+    setTab("manual");
+    setManualSteps(template.steps);
+    if (template.pageUrl) setLocatorUrl(template.pageUrl);
+    setError(null);
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -757,31 +799,33 @@ export default function App() {
           <h1>Katalon script generator</h1>
         </div>
         <div className="header-meta">
-          {health && (
+          {gosiBrainReady !== null && (
             <span
               className="badge"
               style={{
                 background:
-                  health === "ok"
+                  gosiBrainReady === true
                     ? "var(--ok-bg, #e8f5e9)"
-                    : health === "unreachable"
+                    : gosiBrainReady === null
                     ? "var(--error-bg, #ffebee)"
                     : "var(--warn-bg, #fff8e1)",
                 color:
-                  health === "ok"
+                  gosiBrainReady === true
                     ? "var(--ok, #2e7d32)"
-                    : health === "unreachable"
+                    : gosiBrainReady === null
                     ? "var(--error, #c62828)"
                     : "var(--warn, #e65100)",
               }}
+              title={gosiConfigHint ?? undefined}
             >
-              {health === "ok"
+              {gosiBrainReady === true
                 ? "Gosi Brain: ready"
-                : health === "unreachable"
+                : gosiBrainReady === null
                 ? "API unreachable"
-                : "Gosi Brain: set GOSI_BRAIN_CHAT_URL + API_KEY in Netlify env vars"}
+                : gosiConfigHint ?? "Gosi Brain: not configured on API server"}
             </span>
           )}
+          <HelpMenu onOpenWizard={openWizard} />
           <button
             type="button"
             className="theme-toggle"
@@ -793,47 +837,42 @@ export default function App() {
         </div>
       </header>
 
+      <OnboardingWizard open={wizardOpen} onClose={closeWizard} />
+
+      <FailureAnalyzerProvider
+        activeProjectId={activeProjectId}
+        authorizationToken={gosiToken.trim() || localStorage.getItem(GOSI_TOKEN_KEY)?.trim() || undefined}
+        model={model}
+      >
       <div className="app-body">
         <section className="panel">
           <div className="tabs" role="tablist">
-            <button
-              type="button"
-              className={`tab ${tab === "manual" ? "active" : ""}`}
-              onClick={() => setTab("manual")}
-            >
+            <TabWithTip tip={TIPS.tabManual} active={tab === "manual"} onClick={() => setTab("manual")}>
               Manual
-            </button>
-            <button
-              type="button"
-              className={`tab ${tab === "csv" ? "active" : ""}`}
-              onClick={() => setTab("csv")}
-            >
+            </TabWithTip>
+            <TabWithTip tip={TIPS.tabCsv} active={tab === "csv"} onClick={() => setTab("csv")}>
               CSV
-            </button>
-            <button
-              type="button"
-              className={`tab ${tab === "jira" ? "active" : ""}`}
-              onClick={() => setTab("jira")}
-            >
+            </TabWithTip>
+            <TabWithTip tip={TIPS.tabJira} active={tab === "jira"} onClick={() => setTab("jira")}>
               Jira
-            </button>
-            <button
-              type="button"
-              className={`tab ${tab === "record" ? "active" : ""}`}
-              onClick={() => setTab("record")}
+            </TabWithTip>
+            <TabWithTip
+              tip={platform === "mobile" ? "Recording is available for Web only." : TIPS.tabRecord}
+              active={tab === "record"}
               disabled={platform === "mobile"}
-              title={platform === "mobile" ? "Recording is available for Web only" : undefined}
+              onClick={() => setTab("record")}
             >
               Record
-            </button>
+            </TabWithTip>
+            <TabWithTip tip={TIPS.tabFailure} active={tab === "failure"} onClick={() => setTab("failure")}>
+              AI Failure Analyzer
+            </TabWithTip>
           </div>
 
-          {tab === "manual" && (
+          {tab === "manual" ? (
             <div className="stack">
-              <div>
-                <label className="field-label" htmlFor="steps">
-                  Test steps (one per line)
-                </label>
+              <StepTemplatePicker onApply={onApplyStepTemplate} />
+              <FieldBlock tip={TIPS.steps} label="Test steps (one per line)" htmlFor="steps">
                 <textarea
                   id="steps"
                   className="input"
@@ -842,16 +881,11 @@ export default function App() {
                   spellCheck={false}
                 />
                 <FieldClearBelow onClear={() => setManualSteps("")} disabled={!manualSteps.trim()} />
-              </div>
+              </FieldBlock>
             </div>
-          )}
-
-          {tab === "csv" && (
+          ) : tab === "csv" ? (
             <div className="stack">
-              <div>
-                <label className="field-label" htmlFor="csv">
-                  CSV file
-                </label>
+              <FieldBlock tip={TIPS.csv} label="CSV file" htmlFor="csv">
                 <input
                   id="csv"
                   ref={csvInputRef}
@@ -863,7 +897,7 @@ export default function App() {
                   onClear={clearCsvSelection}
                   disabled={!csvFileName && !csvSteps.length}
                 />
-              </div>
+              </FieldBlock>
               <p className="hint">
                 <strong>Simple format:</strong> columns <code>Step</code> + <code>Description</code> (or similar).
                 <br />
@@ -925,14 +959,9 @@ export default function App() {
                 </div>
               )}
             </div>
-          )}
-
-          {tab === "jira" && (
+          ) : tab === "jira" ? (
             <div className="stack">
-              <div>
-                <label className="field-label" htmlFor="jiraBase">
-                  Jira base URL
-                </label>
+              <FieldBlock tip={TIPS.jiraBase} label="Jira base URL" htmlFor="jiraBase">
                 <input
                   id="jiraBase"
                   className="input"
@@ -942,16 +971,13 @@ export default function App() {
                   value={jiraBaseUrl}
                   onChange={(e) => setJiraBaseUrl(e.target.value)}
                 />
-                <p className="hint" style={{ marginTop: "0.25rem" }}>
-                  Use the <strong>site root</strong> (e.g. <code>https://jira.company.com</code>). Long browser URLs like
-                  /secure/Dashboard.jspa are trimmed on the server.
-                </p>
                 <FieldClearBelow onClear={() => setJiraBaseUrl("")} disabled={!jiraBaseUrl.trim()} />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="jiraEmail">
-                  Email (Cloud) or username (Server / Data Center)
-                </label>
+              </FieldBlock>
+              <FieldBlock
+                tip={TIPS.jiraEmail}
+                label="Email (Cloud) or username (Server / Data Center)"
+                htmlFor="jiraEmail"
+              >
                 <input
                   id="jiraEmail"
                   className="input"
@@ -962,11 +988,8 @@ export default function App() {
                   onChange={(e) => setJiraEmail(e.target.value)}
                 />
                 <FieldClearBelow onClear={() => setJiraEmail("")} disabled={!jiraEmail.trim()} />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="jiraToken">
-                  Password, PAT, or API token
-                </label>
+              </FieldBlock>
+              <FieldBlock tip={TIPS.jiraToken} label="Password, PAT, or API token" htmlFor="jiraToken">
                 <input
                   id="jiraToken"
                   className="input"
@@ -976,20 +999,10 @@ export default function App() {
                   value={jiraApiToken}
                   onChange={(e) => setJiraApiToken(e.target.value)}
                 />
-                <p className="hint" style={{ marginTop: "0.25rem" }}>
-                  There is no separate “log in” step. <strong>Test Jira login</strong> and <strong>Fetch from Jira</strong>{" "}
-                  both use <strong>HTTP Basic</strong> auth: the same <code>username:password</code> (or{" "}
-                  <code>email:api_token</code> on Atlassian Cloud) you would use in curl. For{" "}
-                  <code>jira.gosi.ins</code> (Data Center), put your <strong>Jira password</strong> or a{" "}
-                  <strong>PAT</strong> here if your org disabled password for REST.
-                </p>
                 <FieldClearBelow onClear={() => setJiraApiToken("")} disabled={!jiraApiToken.trim()} />
-              </div>
+              </FieldBlock>
               <div className="row-2">
-                <div>
-                  <label className="field-label" htmlFor="jira">
-                    Issue key or browse URL
-                  </label>
+                <FieldBlock tip={TIPS.jiraKey} label="Issue key or browse URL" htmlFor="jira">
                   <input
                     id="jira"
                     className="input"
@@ -999,7 +1012,7 @@ export default function App() {
                     spellCheck={false}
                   />
                   <FieldClearBelow onClear={() => setJiraKey("")} disabled={!jiraKey.trim()} />
-                </div>
+                </FieldBlock>
                 <div style={{ alignSelf: "flex-end", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   <button
                     type="button"
@@ -1037,14 +1050,12 @@ export default function App() {
                   <strong>{jiraMeta.summary}</strong> — {splitSteps(jiraStepsText).length} step line(s) below.
                 </p>
               )}
-              <div className="jira-steps-panel">
-                <label className="field-label" htmlFor="jiraStepsBox">
-                  Test steps from Jira (one per line — used by Generate)
-                </label>
-                <p className="hint" style={{ marginBottom: "0.35rem" }}>
-                  After <strong>Fetch from Jira</strong>, the issue description steps appear here. Edit if needed; the
-                  generator uses exactly these lines while you stay on the Jira tab.
-                </p>
+              <FieldBlock
+                tip={TIPS.jiraSteps}
+                label="Test steps from Jira (one per line — used by Generate)"
+                htmlFor="jiraStepsBox"
+                className="jira-steps-panel"
+              >
                 <textarea
                   id="jiraStepsBox"
                   className="input jira-steps-textarea"
@@ -1058,20 +1069,15 @@ export default function App() {
                   onClear={() => setJiraStepsText("")}
                   disabled={!jiraStepsText.trim()}
                 />
-              </div>
+              </FieldBlock>
             </div>
-          )}
-
-          {tab === "record" && (
+          ) : tab === "record" ? (
             <div className="stack">
               <p className="hint">
                 Opens a real Chromium window on the <strong>machine running the backend</strong>. Use{" "}
                 <strong>Finish recording</strong> in the page when done (or wait for the session timeout).
               </p>
-              <div>
-                <label className="field-label" htmlFor="recordUrl">
-                  URL to open
-                </label>
+              <FieldBlock tip={TIPS.recordUrl} label="URL to open" htmlFor="recordUrl">
                 <input
                   id="recordUrl"
                   className="input"
@@ -1081,15 +1087,14 @@ export default function App() {
                   placeholder="https://..."
                 />
                 <FieldClearBelow onClear={() => setRecordUrl("")} disabled={!recordUrl.trim()} />
-              </div>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={preserveRecordingFidelity}
-                  onChange={(e) => setPreserveRecordingFidelity(e.target.checked)}
-                />
-                Lossless replay (preserve full trace; no inserted steps; skip Groovy optimizers)
-              </label>
+              </FieldBlock>
+              <CheckboxTip
+                id="preserveFidelity"
+                tip={TIPS.preserveFidelity}
+                checked={preserveRecordingFidelity}
+                onChange={setPreserveRecordingFidelity}
+                label="Lossless replay (preserve full trace; no inserted steps; skip Groovy optimizers)"
+              />
               <div className="row-actions">
                 <button
                   type="button"
@@ -1116,15 +1121,11 @@ export default function App() {
                   Cancel recording on server
                 </button>
               </div>
-              <div>
-                <label className="field-label" htmlFor="pwScript">
-                  Playwright-style script (editable)
-                </label>
-                <p className="hint" style={{ marginBottom: "0.35rem" }}>
-                  Katalon is generated from this script on the server (an empty step list is sent). After{" "}
-                  <strong>Record test flow</strong>, locator lines are merged into the main <strong>Locators</strong>{" "}
-                  field below — edit there if needed.
-                </p>
+              <FieldBlock
+                tip={TIPS.recordScript}
+                label="Playwright-style script (editable)"
+                htmlFor="pwScript"
+              >
                 <textarea
                   id="pwScript"
                   className="input record-flow-textarea"
@@ -1139,16 +1140,17 @@ export default function App() {
                   onClear={() => setRecordPlaywrightScript("")}
                   disabled={!recordPlaywrightScript.trim()}
                 />
-              </div>
+              </FieldBlock>
             </div>
-          )}
+          ) : tab === "failure" ? (
+            <FailureAnalyzerInput />
+          ) : null}
 
+          {tab !== "failure" && (
+          <>
           <div className="stack" style={{ marginTop: "1rem" }}>
             <div className="row-2">
-              <div>
-                <label className="field-label" htmlFor="platform">
-                  Platform
-                </label>
+              <FieldBlock tip={TIPS.platform} label="Platform" htmlFor="platform">
                 <select
                   id="platform"
                   className="input"
@@ -1158,7 +1160,26 @@ export default function App() {
                   <option value="web">Web (WebUI)</option>
                   <option value="mobile">Mobile (Mobile)</option>
                 </select>
-              </div>
+              </FieldBlock>
+              <FieldBlock tip={TIPS.codeOutput} label="Code output" htmlFor="code-gen-mode">
+                <select
+                  id="code-gen-mode"
+                  className="input"
+                  value={codeGenerationMode}
+                  onChange={(e) => setCodeGenerationMode(e.target.value as CodeGenerationMode)}
+                >
+                  <option value="auto">Auto detect</option>
+                  <option value="test_script">Test script</option>
+                  <option value="custom_keyword">Custom keyword</option>
+                  <option value="groovy_function">Groovy function</option>
+                  <option value="utility_class">Utility class</option>
+                  <option value="framework_helper">Framework helper</option>
+                  <option value="page_object">Page object</option>
+                  <option value="api_helper">API helper</option>
+                  <option value="db_utility">DB utility</option>
+                  <option value="framework_service">Framework service</option>
+                </select>
+              </FieldBlock>
             </div>
 
             {gosiTokenNotice && (
@@ -1183,10 +1204,7 @@ export default function App() {
               );
             })()}
 
-            <div>
-              <label className="field-label" htmlFor="model">
-                Gosi Brain model
-              </label>
+            <FieldBlock tip={TIPS.model} label="Gosi Brain model" htmlFor="model">
               <select
                 id="model"
                 className="input"
@@ -1199,12 +1217,9 @@ export default function App() {
                   </option>
                 ))}
               </select>
-            </div>
+            </FieldBlock>
 
-            <div>
-              <label className="field-label" htmlFor="name">
-                Test case name (optional)
-              </label>
+            <FieldBlock tip={TIPS.testCaseName} label="Test case name (optional)" htmlFor="name">
               <input
                 id="name"
                 className="input"
@@ -1212,12 +1227,40 @@ export default function App() {
                 onChange={(e) => setTestCaseName(e.target.value)}
               />
               <FieldClearBelow onClear={() => setTestCaseName("")} disabled={!testCaseName.trim()} />
-            </div>
+            </FieldBlock>
 
-            <div>
-              <label className="field-label" htmlFor="katalonProjectPath">
-                Katalon project path (for export)
-              </label>
+            <ProjectIntelligencePanel
+              activeProjectId={activeProjectId}
+              generationMode={projectGenerationMode}
+              onActiveProjectId={setActiveProjectId}
+              onGenerationMode={setProjectGenerationMode}
+            />
+
+            {activeProjectId && (
+              <FieldBlock tip={TIPS.aiMemory} label="AI memory (team style)" htmlFor="ai-memory-mode">
+                <select
+                  id="ai-memory-mode"
+                  className="input"
+                  value={aiMemoryMode}
+                  onChange={(e) =>
+                    setAiMemoryMode(
+                      e.target.value as "disabled" | "learn_only" | "learn_suggest" | "adaptive"
+                    )
+                  }
+                >
+                  <option value="disabled">Disabled</option>
+                  <option value="learn_only">Learn only (index on upload)</option>
+                  <option value="learn_suggest">Learn + suggest (default)</option>
+                  <option value="adaptive">Fully adaptive generation</option>
+                </select>
+              </FieldBlock>
+            )}
+
+            <FieldBlock
+              tip={TIPS.katalonExportPath}
+              label="Katalon project path (for export)"
+              htmlFor="katalonProjectPath"
+            >
               <input
                 id="katalonProjectPath"
                 className="input"
@@ -1226,10 +1269,7 @@ export default function App() {
                 placeholder="C:/Users/Admin/Katalon Studio/projectName"
               />
               <FieldClearBelow onClear={() => setKatalonProjectPath("")} disabled={!katalonProjectPath.trim()} />
-              <p className="hint" style={{ marginTop: "0.4rem" }}>
-                Must be a local Katalon project folder that contains <code>Test Cases</code>.
-              </p>
-            </div>
+            </FieldBlock>
 
             {platform === "mobile" && (
               <div className="mobile-panel">
@@ -1240,10 +1280,11 @@ export default function App() {
                   current emulator screen into the <strong>Locators</strong> box below (or use{" "}
                   <strong>Appium Inspector</strong> separately for a visual tree).
                 </p>
-                <div>
-                  <label className="field-label" htmlFor="appiumUrl">
-                    Appium server URL (keep this as your real server, usually port 4723)
-                  </label>
+                <FieldBlock
+                  tip={TIPS.appiumUrl}
+                  label="Appium server URL (usually port 4723)"
+                  htmlFor="appiumUrl"
+                >
                   <input
                     id="appiumUrl"
                     className="input"
@@ -1251,11 +1292,8 @@ export default function App() {
                     onChange={(e) => setAppiumUrl(e.target.value)}
                     placeholder="http://127.0.0.1:4723"
                   />
-                </div>
-                <div>
-                  <label className="field-label" htmlFor="appiumCaps">
-                    Capabilities (JSON)
-                  </label>
+                </FieldBlock>
+                <FieldBlock tip={TIPS.appiumCaps} label="Capabilities (JSON)" htmlFor="appiumCaps">
                   <textarea
                     id="appiumCaps"
                     className="input"
@@ -1264,7 +1302,7 @@ export default function App() {
                     spellCheck={false}
                     rows={10}
                   />
-                </div>
+                </FieldBlock>
                 <div className="row-actions" style={{ marginTop: "0.5rem" }}>
                   <button type="button" className="btn btn-ghost" onClick={onMobilePingAppium} disabled={mobileLoading}>
                     Check Appium
@@ -1330,10 +1368,7 @@ export default function App() {
               </div>
             )}
 
-             <div>
-               <label className="field-label" htmlFor="stylePass">
-                 Format / style pass
-               </label>
+            <FieldBlock tip={TIPS.stylePass} label="Format / style pass" htmlFor="stylePass">
               <select
                 id="stylePass"
                 className="input"
@@ -1344,17 +1379,13 @@ export default function App() {
                 <option value="simplify">Simplify layout (post-process)</option>
                 <option value="match-project">Match project style (prompt)</option>
               </select>
-            </div>
+            </FieldBlock>
 
-            <div>
-              <label className="field-label" htmlFor="locators">
-                Locators (label = Object Repository path or CSS, one per line)
-              </label>
-              {tab === "record" && (
-                <p className="hint" style={{ marginBottom: "0.35rem" }}>
-                  Each successful <strong>Record test flow</strong> merges <code>name = selector</code> lines here.
-                </p>
-              )}
+            <FieldBlock
+              tip={TIPS.locators}
+              label="Locators (label = Object Repository path or CSS, one per line)"
+              htmlFor="locators"
+            >
               <textarea
                 id="locators"
                 className="input"
@@ -1363,16 +1394,15 @@ export default function App() {
                 spellCheck={false}
               />
               <FieldClearBelow onClear={() => setLocators("")} disabled={!locators.trim()} />
-            </div>
+            </FieldBlock>
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={autoConvertBeforeGenerate}
-                onChange={(e) => setAutoConvertBeforeGenerate(e.target.checked)}
-              />
-              Auto convert before generate (Katalon CSS/XPath only)
-            </label>
+            <CheckboxTip
+              id="autoConvert"
+              tip={TIPS.autoConvert}
+              checked={autoConvertBeforeGenerate}
+              onChange={setAutoConvertBeforeGenerate}
+              label="Auto convert before generate (Katalon CSS/XPath only)"
+            />
 
             <div className="loc-convert-toolbar">
               <button
@@ -1426,10 +1456,11 @@ export default function App() {
               </div>
             )}
 
-            <div>
-              <label className="field-label" htmlFor="locatorUrl">
-                Page URL (preview &amp; auto-detect for generate)
-              </label>
+            <FieldBlock
+              tip={TIPS.locatorUrl}
+              label="Page URL (preview & auto-detect for generate)"
+              htmlFor="locatorUrl"
+            >
               <input
                 id="locatorUrl"
                 className="input"
@@ -1439,12 +1470,9 @@ export default function App() {
                 placeholder="https://..."
               />
               <FieldClearBelow onClear={() => setLocatorUrl("")} disabled={!locatorUrl.trim()} />
-            </div>
+            </FieldBlock>
 
-            <div>
-              <label className="field-label" htmlFor="pageLocale">
-                Page language (Playwright extraction)
-              </label>
+            <FieldBlock tip={TIPS.pageLocale} label="Page language (Playwright extraction)" htmlFor="pageLocale">
               <select
                 id="pageLocale"
                 className="input"
@@ -1455,16 +1483,15 @@ export default function App() {
                 <option value="en">English</option>
                 <option value="ar">Arabic</option>
               </select>
-            </div>
+            </FieldBlock>
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={autoDetectLocators}
-                onChange={(e) => setAutoDetectLocators(e.target.checked)}
-              />
-              Auto-detect for generate (CSS/XPath map; merge with manual; manual wins)
-            </label>
+            <CheckboxTip
+              id="autoDetect"
+              tip={TIPS.autoDetect}
+              checked={autoDetectLocators}
+              onChange={setAutoDetectLocators}
+              label="Auto-detect for generate (CSS/XPath map; merge with manual; manual wins)"
+            />
 
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
               <button
@@ -1477,18 +1504,17 @@ export default function App() {
               </button>
             </div>
             {autoPreview !== null && (
-              <div>
-                <label className="field-label">
-                  Playwright locators preview (getByRole / getByLabel / … — not saved until you generate)
-                </label>
-                <label className="checkbox-row" style={{ marginTop: "0.4rem" }}>
-                  <input
-                    type="checkbox"
-                    checked={brandingOnlyPreview}
-                    onChange={(e) => setBrandingOnlyPreview(e.target.checked)}
-                  />
-                  Show only images / logos / icons
-                </label>
+              <FieldBlock
+                tip={TIPS.locatorPreview}
+                label="Playwright locators preview (not saved until you generate)"
+              >
+                <CheckboxTip
+                  id="brandingPreview"
+                  tip={TIPS.brandingPreview}
+                  checked={brandingOnlyPreview}
+                  onChange={setBrandingOnlyPreview}
+                  label="Show only images / logos / icons"
+                />
                 <textarea
                   className="input locator-preview-textarea"
                   readOnly
@@ -1504,17 +1530,16 @@ export default function App() {
                   }}
                   disabled={!String(autoPreview ?? "").trim()}
                 />
-              </div>
+              </FieldBlock>
             )}
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={useStream}
-                onChange={(e) => setUseStream(e.target.checked)}
-              />
-              Stream response (live typing)
-            </label>
+            <CheckboxTip
+              id="useStream"
+              tip={TIPS.stream}
+              checked={useStream}
+              onChange={setUseStream}
+              label="Stream response (live typing)"
+            />
 
             {error && (
               <div className="error-block">
@@ -1540,37 +1565,16 @@ export default function App() {
               </div>
             )}
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={onGenerate}
-              disabled={loading}
-            >
+            <ActionWithTip tip={TIPS.generate} onClick={onGenerate} disabled={loading}>
               {loading ? "Generating…" : "Generate Katalon Groovy"}
-            </button>
-
-            <p className="hint">
-              {tab === "record" ? (
-                <>
-                  Record tab: generation uses the <strong>Playwright script</strong> and the main{" "}
-                  <strong>Locators</strong> field (filled automatically when you record).
-                </>
-              ) : tab === "jira" ? (
-                <>
-                  Steps in use: <strong>{effectiveSteps.length}</strong> — taken from the <strong>Test steps from Jira</strong>{" "}
-                  box on the Jira tab.
-                </>
-              ) : (
-                <>Steps in use: {effectiveSteps.length}.</>
-              )}
-              {" "}
-              Set <code>GOSI_BRAIN_CHAT_URL</code> and <code>GOSI_BRAIN_API_KEY</code> in{" "}
-              <code>server/.env</code>, then restart the backend.
-            </p>
+            </ActionWithTip>
           </div>
 
           <div className="history">
-            <h2>Recent generations (server)</h2>
+            <div className="field-label-row" style={{ marginBottom: "0.5rem" }}>
+              <h2 style={{ margin: 0 }}>Recent generations (server)</h2>
+              <TipIcon tip={TIPS.history} />
+            </div>
             <button type="button" className="btn btn-ghost btn-small" onClick={onClearHistory}>
               Clear history
             </button>
@@ -1588,33 +1592,75 @@ export default function App() {
               ))}
             </ul>
           </div>
+          </>
+          )}
         </section>
 
         <section className="panel code-panel">
+          {tab === "failure" ? (
+            <FailureAnalyzerResults />
+          ) : (
+          <>
+          <div className="code-panel-header">
+            <span className="field-label">
+              {generationMode === "keyword_template"
+                ? "Generated keyword class"
+                : generationMode === "groovy_utility"
+                  ? "Generated Groovy utility"
+                  : generationMode === "hybrid"
+                    ? "Generated utility + test script"
+                    : "Generated script"}
+            </span>
+            {generationMode === "keyword_template" && (
+              <span className="badge badge-keyword-mode" title="Output is a reusable Custom Keyword class, not a test case">
+                Mode: Custom Keyword Generator
+              </span>
+            )}
+            {generationMode === "groovy_utility" && (
+              <span className="badge badge-keyword-mode" title="Reusable Groovy utility or helper class">
+                Mode: Groovy Utility Generator
+              </span>
+            )}
+            {generationMode === "hybrid" && (
+              <span className="badge badge-keyword-mode" title="Utility class plus test script">
+                Mode: Hybrid (Utility + Test)
+              </span>
+            )}
+            <TipIcon tip={TIPS.output} />
+          </div>
           <div className="code-toolbar">
-            <button type="button" className="btn btn-ghost btn-small" onClick={onClearOutput} disabled={!output.trim()}>
+            <ToolbarBtn
+              tip="Clear the editor."
+              className="btn btn-ghost btn-small"
+              onClick={onClearOutput}
+              disabled={!output.trim()}
+            >
               Clear
-            </button>
-            <button type="button" className="btn btn-ghost btn-small" onClick={onCopy} disabled={!output}>
+            </ToolbarBtn>
+            <ToolbarBtn
+              tip="Copy Groovy to clipboard."
+              className="btn btn-ghost btn-small"
+              onClick={onCopy}
+              disabled={!output}
+            >
               Copy
-            </button>
-            <button
-              type="button"
+            </ToolbarBtn>
+            <ToolbarBtn
+              tip={TIPS.exportKatalon}
               className="btn btn-primary btn-small"
               onClick={handleExportToKatalon}
               disabled={!output.trim() || exportLoading}
-              title="Create a Test Case in your local Katalon project"
             >
               {exportLoading ? "Adding…" : "Add to Katalon Project"}
-            </button>
-            <button
-              type="button"
+            </ToolbarBtn>
+            <ToolbarBtn
+              tip={TIPS.download}
               className="btn btn-ghost btn-small"
               onClick={onDownload}
               disabled={!output}
             >
               Download .groovy
-            </button>
+            </ToolbarBtn>
           </div>
           {exportResult && (
             <div className={`status-banner ${exportResult.ok ? "ok" : "error"}`}>
@@ -1636,9 +1682,15 @@ export default function App() {
               ) : null}
             </div>
           )}
-          <pre className="code-pre" aria-live="polite">
-            {output || (loading ? "…" : "// Generated Groovy appears here")}
-          </pre>
+          <ScriptPanelBody
+            loading={loading}
+            stepCount={effectiveSteps.length}
+            hasOutput={Boolean(output.trim())}
+          >
+            <pre className="code-pre" aria-live="polite">
+              {output}
+            </pre>
+          </ScriptPanelBody>
           {lint && lint.length > 0 && (
             <div className="lint-panel">
               <h3>Script checks</h3>
@@ -1653,8 +1705,11 @@ export default function App() {
               ))}
             </div>
           )}
+          </>
+          )}
         </section>
       </div>
+      </FailureAnalyzerProvider>
     </div>
   );
 }

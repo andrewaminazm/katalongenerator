@@ -1,13 +1,11 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import { loadEnv } from "./loadEnv.js";
 import cors from "cors";
 
-const __dirname = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
-dotenv.config({ path: path.join(__dirname, "..", ".env") });
-dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
+loadEnv();
 import express from "express";
 import { createApiRouter } from "./routes/api.js";
+import { createProjectIntelligenceRouter } from "./routes/projectIntelligenceRoutes.js";
+import { createFailureRouter } from "./routes/failureRoutes.js";
 import { logJiraTlsStartupHint } from "./services/jira.js";
 
 logJiraTlsStartupHint();
@@ -36,6 +34,8 @@ app.use(
 app.use(express.json({ limit: "8mb" }));
 
 app.use("/api", createApiRouter());
+app.use("/api/projects", createProjectIntelligenceRouter());
+app.use("/api/failure", createFailureRouter());
 
 app.use(
   (

@@ -2,38 +2,63 @@ import type { StepIntent } from "../katalonCompiler/types.js";
 import { parseIntent } from "./intentParser.js";
 import { expandIntent, type ExpandOptions } from "./intentExpander.js";
 import { injectAssertions } from "./assertionEngine.js";
+import { stepLineImpliesBrowserKeyword } from "../projectIntelligence/keywordResolve.js";
+
+export interface TestFlowResult {
+  intents: StepIntent[];
+  /** Parallel to intents — original step index in `steps[]`, or -1 for injected/setup rows. */
+  sourceStepIndices: number[];
+  warnings: string[];
+}
 
 /**
  * Builds an intelligent flow from user-provided free-text steps.
- * - Parses high-level intents (search/login/etc.)
- * - Expands into low-level StepIntents
- * - Injects assertions deterministically
- * - Ensures basic setup ordering (openBrowser first for web when needed)
  */
-export function buildTestFlow(
-  steps: string[],
-  opts: ExpandOptions
-): { intents: StepIntent[]; warnings: string[] } {
+export function buildTestFlow(steps: string[], opts: ExpandOptions): TestFlowResult {
   const warnings: string[] = [];
   const platform = opts.platform;
 
-  const expanded: StepIntent[] = [];
-  for (const s of steps) {
+  const intents: StepIntent[] = [];
+  const sourceStepIndices: number[] = [];
+
+  for (let si = 0; si < steps.length; si++) {
+    const s = steps[si];
     const pi = parseIntent(s, platform);
     if (pi.action === "unknown") {
-      // Leave raw step to existing stepParser downstream as fallback.
-      expanded.push({ kind: "unknown", raw: s.trim() });
+      intents.push({ kind: "unknown", raw: s.trim() });
+      sourceStepIndices.push(si);
       continue;
     }
-    expanded.push(...expandIntent(pi, opts));
+    const expanded = expandIntent(pi, opts);
+    for (const intent of expanded) {
+      intents.push(intent);
+      sourceStepIndices.push(si);
+    }
   }
 
-  // Inject assertions (web only currently).
-  let intents = injectAssertions(expanded, platform);
+  let flowIntents = intents;
+  let flowIndices = sourceStepIndices;
 
-  // Ensure setup: openBrowser before first web action if missing.
   if (platform === "web") {
-    const needsBrowser = intents.some((i) =>
+    const injected = injectAssertions(flowIntents, platform);
+    if (injected.length !== flowIntents.length) {
+      const nextIndices: number[] = [];
+      let j = 0;
+      for (let i = 0; i < injected.length; i++) {
+        if (j < flowIntents.length && injected[i] === flowIntents[j]) {
+          nextIndices.push(flowIndices[j]);
+          j++;
+        } else {
+          nextIndices.push(-1);
+        }
+      }
+      flowIndices = nextIndices;
+    }
+    flowIntents = injected;
+  }
+
+  if (platform === "web") {
+    const needsBrowser = flowIntents.some((i) =>
       [
         "click",
         "check",
@@ -45,14 +70,18 @@ export function buildTestFlow(
         "navigate",
       ].includes(i.kind)
     );
-    const hasOpen = intents.some((i) => i.kind === "openBrowser");
-    if (needsBrowser && !hasOpen) {
+    const keywordOpensBrowser = flowIntents.some(
+      (i) => i.kind === "callKeyword" && stepLineImpliesBrowserKeyword(i.ref)
+    );
+    const hasOpen = flowIntents.some((i) => i.kind === "openBrowser");
+    const keywordOpensFirst = steps.some((s) => stepLineImpliesBrowserKeyword(s));
+    if ((needsBrowser || keywordOpensBrowser) && !hasOpen && !keywordOpensFirst) {
       const url = opts.defaultUrl?.trim() || "about:blank";
-      intents = [{ kind: "openBrowser", url }, ...intents];
+      flowIntents = [{ kind: "openBrowser", url }, ...flowIntents];
+      flowIndices = [-1, ...flowIndices];
       warnings.push("Test Intelligence: inserted openBrowser at start.");
     }
   }
 
-  return { intents, warnings };
+  return { intents: flowIntents, sourceStepIndices: flowIndices, warnings };
 }
-

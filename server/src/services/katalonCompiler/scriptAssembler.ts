@@ -114,6 +114,11 @@ function emitWebOperations(ops: InternalOp[], decls: TestObjectDecl[]): string[]
         lines.push(`WebUI.waitForPageLoad(${op.seconds})`);
         break;
       }
+      case "customKeyword": {
+        if (op.stepComment) lines.push(groovyCommentLine(op.stepComment));
+        lines.push(op.call);
+        break;
+      }
       case "click": {
         if (op.stepComment) {
           lines.push(groovyCommentLine(op.stepComment));
@@ -222,6 +227,11 @@ function emitMobileOperations(ops: InternalOp[], decls: TestObjectDecl[]): strin
 
   for (const op of ops) {
     switch (op.kind) {
+      case "customKeyword": {
+        if (op.stepComment) lines.push(groovyCommentLine(op.stepComment));
+        lines.push(op.call);
+        break;
+      }
       case "startApplication": {
         const p = esc(op.path);
         lines.push(`Mobile.startApplication('${p}', false)`);

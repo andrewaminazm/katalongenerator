@@ -29,9 +29,11 @@ export function expandIntent(intent: ParsedIntent, opts: ExpandOptions): StepInt
     ];
   }
 
-  if (intent.action === "navigate" && intent.url) {
+  if (intent.action === "navigate") {
+    const url = intent.url?.trim() || opts.defaultUrl?.trim();
+    if (!url) return [{ kind: "unknown", raw: intent.raw }];
     return platform === "web"
-      ? [{ kind: "navigate", url: intent.url }]
+      ? [{ kind: "openBrowser", url }]
       : [{ kind: "unknown", raw: intent.raw }];
   }
 
@@ -46,6 +48,14 @@ export function expandIntent(intent: ParsedIntent, opts: ExpandOptions): StepInt
   }
   if (platform === "web" && intent.action === "uncheck" && intent.target) {
     return [{ kind: "uncheck", targetHint: intent.target }];
+  }
+
+  if (intent.action === "callKeyword" && intent.target) {
+    return [{ kind: "callKeyword", ref: intent.target, raw: intent.raw }];
+  }
+
+  if (intent.action === "comment") {
+    return [{ kind: "comment", raw: intent.raw }];
   }
 
   if (intent.action === "verify" && intent.target) {

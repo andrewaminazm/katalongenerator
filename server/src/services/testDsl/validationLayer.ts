@@ -13,7 +13,15 @@ export function validateDsl(steps: TestDslStep[]): DslValidationResult {
   steps.forEach((s, idx) => {
     const n = idx + 1;
     if (!s.action) errors.push(`Step ${n}: missing action`);
-    if (s.action === "pressEnter") return;
+    if (
+      s.action === "pressEnter" ||
+      s.action === "callKeyword" ||
+      s.action === "comment" ||
+      s.action === "createKeyword" ||
+      s.action === "generateUtility"
+    ) {
+      return;
+    }
     if (s.action === "keyAction") {
       if (!s.target?.trim()) warnings.push(`Step ${n}: keyAction missing target`);
       if (!(s.value ?? "").trim()) warnings.push(`Step ${n}: keyAction missing key`);

@@ -22,6 +22,17 @@ export { convertPlaywrightRhsToKatalonSelector, isPlaywrightLocatorRhs } from ".
 export { resolveLocatorWithFallbacks, extractSelectorFromHint } from "./locatorResolve.js";
 export { parseStepLine, parseAllSteps } from "./stepParser.js";
 export { compileActions } from "./actionCompiler.js";
+export {
+  generateKeywordClassTemplate,
+  compileKeywordTemplate,
+  inferKeywordClassName,
+  inferKeywordMethodName,
+  KEYWORD_TEMPLATE_MODEL_ID,
+} from "./keywordTemplateGenerator.js";
+export {
+  analyzeKeywordGenerationRequest,
+  generateKeywordTemplateFromSteps,
+} from "./keywordGenerationRouter.js";
 
 function coalesceWebOpens(ops: InternalOp[], fallbackUrl?: string): InternalOp[] {
   if (ops.length === 0) return ops;
@@ -53,6 +64,7 @@ export function compileKatalonScript(input: CompileKatalonInput): CompileKatalon
 
   // Use intelligent intents directly; only re-parse unknown raw lines through the legacy parser.
   const intents = ti.intents.map((i) => (i.kind === "unknown" ? parseStepLine(i.raw, input.platform) : i));
+  const sourceStepIndexByIntent = ti.sourceStepIndices;
 
   const parallelSelectors =
     input.playwrightContextSelectors &&
@@ -66,6 +78,13 @@ export function compileKatalonScript(input: CompileKatalonInput): CompileKatalon
     parsedLines: lines,
     selectorByTestObjectLabel: input.selectorByTestObjectLabel,
     ...(parallelSelectors ? { playwrightContextSelectors: parallelSelectors } : {}),
+    ...(input.projectBindingsByStepIndex
+      ? { projectBindingsByStepIndex: input.projectBindingsByStepIndex }
+      : {}),
+    ...(input.projectKeywords?.length ? { projectKeywords: input.projectKeywords } : {}),
+    ...(sourceStepIndexByIntent.length === intents.length
+      ? { sourceStepIndexByIntent }
+      : {}),
   });
   warnings.push(...w1);
 

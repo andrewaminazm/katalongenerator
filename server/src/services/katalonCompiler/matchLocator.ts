@@ -7,9 +7,20 @@ function normKey(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Collapse spaces for substring / fuzzy comparison. */
+/** Collapse spaces for substring / fuzzy comparison (keeps underscores). */
 function compact(s: string): string {
   return s.toLowerCase().replace(/\s+/g, "").trim();
+}
+
+/** Reject short labels that are only a prefix of a longer locator name (button_ vs button_Show more-board). */
+function isWeakPrefixLabel(label: string, hint: string): boolean {
+  const l = label.toLowerCase().trim();
+  const h = hint.toLowerCase().trim();
+  if (l.length < 2 || l.length >= h.length) return false;
+  if (!h.startsWith(l)) return false;
+  if (l.endsWith("_") || l.endsWith("-")) return true;
+  const next = h[l.length];
+  return next === "_" || next === "-" || next === " " || next === "/";
 }
 
 /** Apply light synonym normalization to hints and labels. */
@@ -111,9 +122,11 @@ export function matchLocatorByHint(
       score = 1_000_000;
     } else if (Lc === hCompact && hCompact.length > 0) {
       score = 950_000;
+    } else if (isWeakPrefixLabel(loc.label, hRaw)) {
+      score = 0;
     } else if (L.includes(h) && h.length >= 2) {
       score = 800_000 + L.length * 100;
-    } else if (h.includes(L) && L.length >= 2) {
+    } else if (h.includes(L) && L.length >= 2 && !isWeakPrefixLabel(loc.label, hRaw)) {
       score = 700_000 + L.length * 100;
     } else {
       const dice = Math.max(diceSimilarity(h, L), diceSimilarity(hCompact, Lc));

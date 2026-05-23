@@ -1,3 +1,8 @@
+import { extractKeywordRefFromStep } from "../projectIntelligence/stepReferenceExtractor.js";
+import { stepRequestsProjectWebsite } from "../projectIntelligence/projectUrlResolver.js";
+import { detectCreateKeywordIntent } from "./keywordCreateIntent.js";
+import { detectGroovyUtilityIntent } from "./groovyUtilityIntent.js";
+
 export type DslAction =
   | "navigate"
   | "click"
@@ -9,7 +14,10 @@ export type DslAction =
   | "pressEnter"
   | "keyAction"
   | "check"
-  | "uncheck";
+  | "uncheck"
+  | "callKeyword"
+  | "comment"
+  | "createKeyword";
 
 /** High-level QA intent (compiler / reporting). */
 export type SemanticIntentKind = "navigation" | "interaction" | "input" | "validation" | "system";
@@ -36,11 +44,27 @@ const KNOWN_SITE_ALIASES: Record<string, string> = {
 /**
  * Resolve phrases like "go to google" / "visit github.com" when no URL is present.
  */
+const NAV_HOST_STOP_WORDS = new Set([
+  "my",
+  "our",
+  "the",
+  "this",
+  "a",
+  "project",
+  "website",
+  "site",
+  "app",
+  "application",
+  "home",
+  "page",
+]);
+
 export function inferKnownSiteUrl(raw: string): string | undefined {
   const s = raw.trim();
   const m = s.match(/\b(?:go\s+to|visit|open|navigate(?:\s+to)?)\s+([a-z0-9][a-z0-9.-]*)\b/i);
   if (!m) return undefined;
   const host = m[1].toLowerCase();
+  if (NAV_HOST_STOP_WORDS.has(host)) return undefined;
   if (KNOWN_SITE_ALIASES[host]) return KNOWN_SITE_ALIASES[host];
   if (host.includes(".")) {
     return /^https?:\/\//i.test(host) ? host : `https://${host}`;
@@ -65,6 +89,10 @@ export function mapActionToSemanticIntent(action: DslAction | "unknown"): Semant
     case "verify":
       return "validation";
     case "wait":
+    case "callKeyword":
+    case "comment":
+    case "createKeyword":
+    case "generateUtility":
       return "system";
     default:
       return "validation";
@@ -83,6 +111,23 @@ export function classifyIntent(raw: string): ClassifiedStep {
   const s = raw.trim();
   const lower = s.toLowerCase();
   const url = detectUrl(s);
+
+  if (detectGroovyUtilityIntent(s)) {
+    return { action: "generateUtility", raw: s, lower };
+  }
+
+  if (detectCreateKeywordIntent(s)) {
+    return { action: "createKeyword", raw: s, lower };
+  }
+
+  if (extractKeywordRefFromStep(s)) {
+    return { action: "callKeyword", raw: s, lower };
+  }
+
+  /** Groovy/Katalon import lines are not executable steps — skip in DSL. */
+  if (/^\s*import\s+[\w.]+\s*$/i.test(s)) {
+    return { action: "comment", raw: s, lower };
+  }
 
   // Before "press" as click: Enter / Return
   if (/\b(press|hit)\s*(enter|return)\b/i.test(lower) || /\bsend\s*keys?\s*:?\s*enter\b/i.test(lower)) {
@@ -114,6 +159,8 @@ export function classifyIntent(raw: string): ClassifiedStep {
   if (/\b(open|launch|start)\b/i.test(lower) && /\b(browser)\b/i.test(lower)) {
     return { action: "navigate", raw: s, lower };
   }
+  if (stepRequestsProjectWebsite(s)) return { action: "navigate", raw: s, lower };
+
   if (url && /\b(visit|open|go\s+to|navigate|load)\b/i.test(lower)) return { action: "navigate", raw: s, lower };
   if (url) return { action: "navigate", raw: s, lower };
 

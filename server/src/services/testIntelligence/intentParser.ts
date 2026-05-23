@@ -10,6 +10,8 @@ export type IntentAction =
   | "select"
   | "scroll"
   | "pressEnter"
+  | "callKeyword"
+  | "comment"
   | "unknown";
 
 export interface ParsedIntent {
@@ -26,6 +28,12 @@ export interface ParsedIntent {
 
 import { normalizeLocatorHint } from "../katalonCompiler/locatorResolve.js";
 import { tryPressEnterIntent } from "../katalonCompiler/stepHints.js";
+import {
+  extractBareKeywordRefFromStep,
+  extractKeywordRefFromStep,
+  stripStepNumberPrefix,
+} from "../projectIntelligence/stepReferenceExtractor.js";
+import { stepRequestsProjectWebsite } from "../projectIntelligence/projectUrlResolver.js";
 
 const URL_RE = /(https?:\/\/[^\s"'<>]+|www\.[^\s"'<>]+)/i;
 
@@ -44,7 +52,8 @@ function extractQuoted(s: string): string | undefined {
 
 export function parseIntent(step: string, platform: "web" | "mobile"): ParsedIntent {
   const raw = step.trim();
-  const lower = raw.toLowerCase();
+  const cleaned = stripStepNumberPrefix(raw);
+  const lower = cleaned.toLowerCase();
   const url = extractUrl(raw);
   const quoted = extractQuoted(raw);
 
@@ -67,6 +76,21 @@ export function parseIntent(step: string, platform: "web" | "mobile"): ParsedInt
   if (searchMatch) {
     const target = (quoted ?? searchMatch[1]).trim();
     if (target) return { action: "search", target, raw, platform };
+  }
+
+  const withoutLineComment = cleaned.replace(/^\s*\/\/\s*/, "").trim();
+  if (/^\s*import\s+[\w.]+\s*$/i.test(withoutLineComment)) {
+    return { action: "comment", raw: withoutLineComment, platform };
+  }
+
+  const keywordRef = extractKeywordRefFromStep(raw) ?? extractBareKeywordRefFromStep(raw);
+  if (keywordRef?.trim()) {
+    return {
+      action: "callKeyword",
+      target: keywordRef.trim().replace(/\s*\([^)]*\)\s*$/, ""),
+      raw,
+      platform,
+    };
   }
 
   if (/\b(login|sign\s*in|log\s*in)\b/i.test(lower)) {
@@ -101,8 +125,13 @@ export function parseIntent(step: string, platform: "web" | "mobile"): ParsedInt
     return { action: "click", target: t || raw, raw, platform };
   }
 
-  if (url && /\b(navigate|go\s+to|visit|open)\b/i.test(lower)) {
-    return { action: "navigate", url, target: url, raw, platform };
+  if (stepRequestsProjectWebsite(cleaned)) {
+    return { action: "navigate", raw, platform };
+  }
+
+  if (/\b(navigate|go\s+to|visit|open)\b/i.test(lower)) {
+    if (url) return { action: "navigate", url, target: url, raw, platform };
+    return { action: "navigate", raw, platform };
   }
 
   if (/\bverify|assert|expect\b/i.test(lower)) {

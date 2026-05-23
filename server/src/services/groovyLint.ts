@@ -18,6 +18,10 @@ const BAD_WEB_IMPORT_LINE =
 
 export interface GroovyLintOptions {
   platform?: "web" | "mobile";
+  /** Custom Keyword class template — skip test-script-only lint rules */
+  keywordTemplate?: boolean;
+  /** Groovy utility / framework helper — skip test-script-only lint rules */
+  groovyUtility?: boolean;
 }
 
 export function lintGroovy(
@@ -87,7 +91,7 @@ export function lintGroovy(
     });
   }
 
-  if (/^\s*import\s+/m.test(code)) {
+  if (!options?.keywordTemplate && /^\s*import\s+/m.test(code)) {
     issues.push({
       rule: "top-level-imports",
       severity: "info",
@@ -96,7 +100,7 @@ export function lintGroovy(
     });
   }
 
-  if (knownOrPaths.size > 0) {
+  if (!options?.keywordTemplate && !options?.groovyUtility && knownOrPaths.size > 0) {
     const re = /findTestObject\s*\(\s*['"]([^'"]+)['"]\s*\)/gi;
     for (const m of code.matchAll(re)) {
       const path = m[1];

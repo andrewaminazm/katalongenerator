@@ -9,17 +9,33 @@ This guide is for **end users**. It explains how to enter test steps on each tab
 1. Make sure the green status shows **Gosi Brain: ready** (top right). If you see **API unreachable**, contact your administrator — the app cannot reach the server.
 2. Choose **Platform**: **Web (WebUI)** for websites, **Mobile** for apps via Appium (see “Mobile” at the end).
 
-Your workflow is always:
+Your workflow for **generating** tests:
 
 1. **Get test steps** (Manual, CSV, Jira, or Record tab).
-2. **Add locators** — type them yourself **and/or** fetch them from a page URL **and/or** use recording (Record tab fills locators automatically).
-3. Scroll down and click **Generate Katalon Groovy**. The script appears in the panel on the right.
+2. **Optional:** upload a Katalon project and set **Active project** (see **Project intelligence** below).
+3. **Choose Code output** (test script, custom keyword, page object, utility, or Auto).
+4. **Add locators** — type them yourself **and/or** fetch from Page URL **and/or** use recording.
+5. Click **Generate Katalon Groovy**. The script appears on the right.
+
+For **debugging failures**, use the **AI Failure Analyzer** tab (paste execution logs only — no stacktrace required).
 
 ---
 
-## The four tabs (where your steps come from)
+## Tabs at the top
 
-Use **one tab at a time** as the source of steps when you generate.
+| Tab | Purpose |
+|-----|---------|
+| **Manual** | Type steps line by line |
+| **CSV** | Import steps or test-case exports |
+| **Jira** | Fetch steps from an issue |
+| **Record** | Record a web flow (**Web** platform only) |
+| **AI Failure Analyzer** | Debug failures from Katalon execution logs (does not generate scripts) |
+
+For **Generate**, use one of Manual, CSV, Jira, or Record at a time. Failure Analyzer is a separate workflow.
+
+---
+
+## Getting test steps (Manual, CSV, Jira, Record)
 
 ### Manual
 
@@ -132,6 +148,70 @@ If your Locators box contains Playwright/Selenium/Cypress style lines:
 
 ---
 
+## Code output (what Generate produces)
+
+Before you click **Generate Katalon Groovy**, choose **Code output**:
+
+| Mode | When to use |
+|------|-------------|
+| **Auto detect** | Default — test script for normal steps; keyword class if you say “create keyword”. |
+| **Test script** | Standard Katalon test case (WebUI / Mobile / API). |
+| **Custom keyword** | Your steps become an `@Keyword` class (e.g. visit + click wrapped as a reusable method). |
+| **Page object** | Steps wrapped in a page object style class. |
+| **Utility class / Framework helper** | Reusable helper Groovy class from your steps. |
+| **Groovy function** | Single utility-style function from steps. |
+| **API helper / DB utility / Framework service** | Service-style scaffold (best for API/DB-focused steps). |
+
+The right panel shows which mode ran (e.g. “Custom Keyword Generator”).
+
+---
+
+## Project intelligence
+
+Reuse your real Katalon Studio project when generating or analyzing failures:
+
+1. Under **Project intelligence**, upload a full project **.zip** or **.rar** (Object Repository, Keywords, Scripts).
+2. Wait for indexing (counts appear when ready).
+3. Select **Active project**.
+4. **Generation mode:** **Strict reuse** (safest), **Balanced** (default), or **Generate everything** (minimal reuse).
+5. In steps, use names from your repo: `click button_Login`, `use keyword common.WebUiHelpers.openToUrl`.
+6. Generate emits `findTestObject('…')` and `CustomKeywords.'…'` when matches are confident.
+
+**AI memory (team style)** — when a project is active:
+
+- **Learn + suggest** (recommended): generation and failure analysis follow your team’s waits, naming, and keywords.
+- **Fully adaptive**: also scores output against learned patterns.
+
+Use the explorer tabs (OR, Keywords, Scripts, Flows) to copy exact names. Re-upload after large project changes.
+
+---
+
+## AI Failure Analyzer (log-only)
+
+Use this when a test **fails** — you only need **Katalon execution logs**.
+
+1. Open **AI Failure Analyzer** tab.
+2. Paste logs in **Katalon execution logs (primary)** — console output, `.log` file text, or report excerpt. Example lines:
+
+```text
+[INFO] WebUI.waitForElementVisible(findTestObject('Page_Login/btn_Login'), 30)
+[FAILED] Unable to click on object 'Page_Login/btn_Login'
+com.kms.katalon.core.exception.StepFailedException
+```
+
+3. Click **Analyze failure**.
+4. Review on the right:
+   - **Root cause** and failure type (locator, timing, API, assertion, etc.)
+   - **Root cause confidence** and **flaky probability**
+   - **Detected patterns** (e.g. wait timeout, stale element)
+   - **Suggested fixes** (WebUI waits, Object Repository, Custom Keywords)
+
+**You do not need:** stacktrace, screenshot, HAR, or console logs (all optional).
+
+With an **Active project**, the analyzer can link failures to your keywords and test objects. **AI memory** improves recommendations (e.g. prefer `WaitHelper.waitVisible()` over `WebUI.delay()`).
+
+---
+
 ## Generate Katalon Groovy
 
 When your **steps** are ready from the active tab **and** your **locators** situation is clear:
@@ -178,3 +258,18 @@ The **Record** tab is hidden for Mobile — Web recording does not apply.
 ## History
 
 If **History** appears at the bottom, click an older run to reload its steps and script into the workspace.
+
+---
+
+## In-app help
+
+Click **?** (top right) for:
+
+- **Quick tour** — short walkthrough of generate, project intelligence, and failure analyzer
+- **How to use this tool** — full generation workflow
+- **Project intelligence** — upload, active project, generation mode
+- **AI Failure Analyzer** — log-only failure debugging
+- **Code output modes** — test script vs keyword vs page object, etc.
+- **AI memory (team style)** — learn patterns from your project
+
+Hover **i** icons next to fields for quick tips.

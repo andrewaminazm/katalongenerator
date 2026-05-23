@@ -10,6 +10,12 @@ import { bindValues } from "./valueBindingEngine.js";
 import { resolveSemanticTarget } from "./targetResolver.js";
 import { validateDsl } from "./validationLayer.js";
 import { repairStepsBeforeValidation } from "./stepRepairEngine.js";
+import { extractKeywordRefFromStep } from "../projectIntelligence/stepReferenceExtractor.js";
+import { extractKeywordCreateSubject } from "./keywordCreateIntent.js";
+import { extractGroovyUtilitySubject } from "./groovyUtilityIntent.js";
+import {
+  stepRequestsProjectWebsite,
+} from "../projectIntelligence/projectUrlResolver.js";
 
 /** Canonical DSL step — QA compiler output (not user-shaped). */
 export interface TestDslStep {
@@ -38,6 +44,9 @@ function baseConfidenceForAction(action: DslAction): number {
     case "wait":
     case "pressEnter":
     case "keyAction":
+    case "callKeyword":
+    case "createKeyword":
+    case "generateUtility":
       return 95;
     case "click":
     case "check":
@@ -87,6 +96,14 @@ export function canonicalize(step: TestDslStep): string {
       return `check ${step.target ?? ""}`.trim();
     case "uncheck":
       return `uncheck ${step.target ?? ""}`.trim();
+    case "callKeyword":
+      return step.raw?.trim() || `use keyword ${step.value ?? ""}`.trim();
+    case "createKeyword":
+      return step.raw?.trim() || `create keyword ${step.value ?? ""}`.trim();
+    case "generateUtility":
+      return step.raw?.trim() || `create utility ${step.value ?? ""}`.trim();
+    case "comment":
+      return `// ${(step.raw ?? "").trim()}`;
     default:
       return step.raw ?? "unknown";
   }
@@ -95,6 +112,8 @@ export function canonicalize(step: TestDslStep): string {
 export function universalStepNormalizer(params: {
   input: AnyStepsInput;
   platform: "web" | "mobile";
+  /** When set, "visit my website" / "site in my project" resolve to this URL. */
+  projectDefaultUrl?: string;
 }): NormalizeResult {
   const rawLines = unifyToRawStepLines(params.input);
   const dsl: TestDslStep[] = [];
@@ -104,6 +123,19 @@ export function universalStepNormalizer(params: {
   for (const raw of rawLines) {
     const c = classifyIntent(raw);
     if (c.action === "unknown") {
+      if (stepRequestsProjectWebsite(raw) && params.projectDefaultUrl?.trim()) {
+        dsl.push(
+          applyConfidence({
+            action: "navigate",
+            value: params.projectDefaultUrl.trim(),
+            intent: mapActionToSemanticIntent("navigate"),
+            sourceConfidence: 88,
+            context: { projectWebsite: true },
+            raw,
+          })
+        );
+        continue;
+      }
       const inferredUrl = inferKnownSiteUrl(raw);
       if (inferredUrl) {
         dsl.push(
@@ -151,7 +183,60 @@ export function universalStepNormalizer(params: {
     }
 
     const sem = mapActionToSemanticIntent(c.action);
-    const parts = bindValues(c.action, raw);
+    const parts = bindValues(c.action, raw, { projectDefaultUrl: params.projectDefaultUrl });
+
+    if (c.action === "generateUtility") {
+      dsl.push(
+        applyConfidence({
+          action: "generateUtility",
+          value: extractKeywordCreateSubject(raw) ?? raw.trim(),
+          intent: sem,
+          sourceConfidence: 100,
+          raw,
+        })
+      );
+      continue;
+    }
+
+    if (c.action === "createKeyword") {
+      const subject = extractKeywordCreateSubject(raw) ?? raw.trim();
+      dsl.push(
+        applyConfidence({
+          action: "createKeyword",
+          value: subject,
+          intent: sem,
+          sourceConfidence: 100,
+          raw,
+        })
+      );
+      continue;
+    }
+
+    if (c.action === "comment") {
+      dsl.push(
+        applyConfidence({
+          action: "comment",
+          intent: sem,
+          sourceConfidence: 100,
+          raw,
+        })
+      );
+      continue;
+    }
+
+    if (c.action === "callKeyword") {
+      const ref = extractKeywordRefFromStep(raw) ?? raw;
+      dsl.push(
+        applyConfidence({
+          action: "callKeyword",
+          value: ref,
+          intent: sem,
+          sourceConfidence: 98,
+          raw,
+        })
+      );
+      continue;
+    }
 
     if (c.action === "navigate") {
       const u = parts.url ?? detectUrl(raw) ?? inferKnownSiteUrl(raw);

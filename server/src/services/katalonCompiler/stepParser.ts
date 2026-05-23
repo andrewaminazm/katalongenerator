@@ -23,6 +23,14 @@ export function parseStepLine(step: string, platform: "web" | "mobile"): StepInt
     return { kind: "unknown", raw };
   }
 
+  const keywordRef =
+    raw.match(/CustomKeywords\s*\.\s*'([^']+)'/i)?.[1] ??
+    raw.replace(/^\s*\d+[\s.\):\-]+/, "").match(/\b(?:use|call)\s+(?:the\s+)?keyword\s+(.+)$/i)?.[1] ??
+    raw.match(/\bkeyword\s*:\s*(.+)$/i)?.[1];
+  if (keywordRef?.trim()) {
+    return { kind: "callKeyword", ref: keywordRef.trim().replace(/\s*\([^)]*\)\s*$/, "") };
+  }
+
   const url = extractUrl(raw);
 
   if (

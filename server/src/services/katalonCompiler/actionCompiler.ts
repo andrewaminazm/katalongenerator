@@ -6,6 +6,13 @@ import {
   type LocatorMatchIntent,
 } from "./locatorResolve.js";
 import { StateTracker } from "./stateTracker.js";
+import type { ParsedKeywordClass } from "../projectIntelligence/types.js";
+import { extractKeywordArgsFromStep } from "../projectIntelligence/stepReferenceExtractor.js";
+import { resolveUrlParameterValue } from "../projectIntelligence/keywordParser.js";
+import {
+  formatResolvedKeywordCall,
+  resolveKeywordRef,
+} from "../projectIntelligence/keywordResolve.js";
 import type { ParsedLocatorLine, ResolvedLocator, StepIntent } from "./types.js";
 
 const DEFAULT_WAIT_SEC = 10;
@@ -43,7 +50,9 @@ export type InternalOp =
   | { kind: "swipeComment" }
   | { kind: "waitPage"; seconds: number }
   /** Preserves step order in output when a step cannot be compiled (no silent drop). */
-  | { kind: "compilerComment"; text: string };
+  | { kind: "compilerComment"; text: string }
+  /** Reuse existing project custom keyword */
+  | { kind: "customKeyword"; call: string; stepComment?: string };
 
 export interface CompileActionsResult {
   operations: InternalOp[];
@@ -55,6 +64,44 @@ export interface CompileActionsResult {
 function resolveUrlForOpen(url: string | undefined, fallback?: string): string {
   const u = url?.trim() || fallback?.trim() || "";
   return u || "about:blank";
+}
+
+function escGroovyString(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+/** Fallback when project index is missing but step names a Class.method ref. */
+function synthesizeKeywordCall(
+  ref: string,
+  defaultUrl?: string,
+  literalArgs?: string[]
+): string {
+  const path = ref.trim().replace(/^CustomKeywords\s*\.\s*'?|'?$/gi, "").trim();
+  if (!path.includes(".")) return "";
+  const url = resolveUrlParameterValue(literalArgs?.[0], defaultUrl);
+  return `CustomKeywords.'${escGroovyString(path)}'('${escGroovyString(url)}')`;
+}
+
+function resolveKeywordCallForRef(
+  ref: string,
+  keywords: ParsedKeywordClass[] | undefined,
+  defaultUrl?: string,
+  stepRaw?: string
+): string | undefined {
+  const trimmed = ref.trim();
+  if (!trimmed) return undefined;
+  const literalArgs = stepRaw ? extractKeywordArgsFromStep(stepRaw) : [];
+  const kwOpts = {
+    defaultUrl,
+    stepLiteralArgs: literalArgs.length ? literalArgs : undefined,
+  };
+  if (keywords?.length) {
+    const resolved = resolveKeywordRef(trimmed, keywords);
+    if (resolved) {
+      return formatResolvedKeywordCall(resolved, kwOpts);
+    }
+  }
+  return synthesizeKeywordCall(trimmed, defaultUrl, literalArgs) || undefined;
 }
 
 function bodyLocatorForKeys(pageUrl?: string): ResolvedLocator | null {
@@ -76,6 +123,13 @@ export function compileActions(
     selectorByTestObjectLabel?: Record<string, string>;
     /** Same length as `intents`: raw Playwright `context.selector` per step when label lookup fails. */
     playwrightContextSelectors?: (string | undefined)[];
+    projectBindingsByStepIndex?: Record<
+      number,
+      { orPath?: string; orLabel?: string; keywordCall?: string }
+    >;
+    /** Same length as intents — original test step index for project bindings. */
+    sourceStepIndexByIntent?: number[];
+    projectKeywords?: ParsedKeywordClass[];
   }
 ): CompileActionsResult {
   const warnings: string[] = [];
@@ -122,9 +176,86 @@ export function compileActions(
     return buildFallbackResolvedLocator("element", pageUrl)!;
   };
 
+  const projectBinding = (intentIdx: number) => {
+    const stepIdx = options.sourceStepIndexByIntent?.[intentIdx];
+    if (stepIdx == null || stepIdx < 0) return undefined;
+    return options.projectBindingsByStepIndex?.[stepIdx];
+  };
+
+  const orPathLocator = (
+    orPath: string,
+    label: string
+  ): ResolvedLocator => ({
+    label,
+    varBase: label.replace(/[^\w\u0600-\u06FF]+/g, "_").slice(0, 40) || "orEl",
+    kind: "orPath",
+    propertyName: "",
+    value: orPath,
+    orPath,
+    score: 100,
+  });
+
   for (let intentIdx = 0; intentIdx < intents.length; intentIdx++) {
     const intent = intents[intentIdx];
+    const binding = projectBinding(intentIdx);
+
+    let keywordCall = binding?.keywordCall;
+    if (!keywordCall && intent.kind === "callKeyword") {
+      keywordCall = resolveKeywordCallForRef(
+        intent.ref,
+        options.projectKeywords,
+        options.defaultUrl,
+        intent.raw
+      );
+    }
+
+    if (
+      keywordCall &&
+      (intent.kind === "openBrowser" || intent.kind === "navigate") &&
+      /open|url|browser|navigate|launch/i.test(keywordCall)
+    ) {
+      operations.push({
+        kind: "customKeyword",
+        call: keywordCall,
+        stepComment: "Open application (project)",
+      });
+      continue;
+    }
+
+    if (
+      keywordCall &&
+      intent.kind !== "openBrowser" &&
+      intent.kind !== "navigate" &&
+      intent.kind !== "closeBrowser" &&
+      intent.kind !== "maximize" &&
+      intent.kind !== "waitPage"
+    ) {
+      operations.push({
+        kind: "customKeyword",
+        call: keywordCall,
+        stepComment: intent.kind === "callKeyword" ? intent.ref : "Project keyword",
+      });
+      continue;
+    }
+
     switch (intent.kind) {
+      case "comment": {
+        operations.push({
+          kind: "compilerComment",
+          text: intent.raw.trim().startsWith("//") ? intent.raw.trim().slice(2).trim() : intent.raw.trim(),
+        });
+        break;
+      }
+      case "callKeyword": {
+        operations.push({
+          kind: "compilerComment",
+          text: `// Keyword not resolved: ${intent.ref} — use Class.method (e.g. common.WebUiHelpers.openToUrl) with an active project`,
+        });
+        warnings.push(
+          `callKeyword "${intent.ref}": not resolved — upload project, set Active project, or check spelling`
+        );
+        break;
+      }
       case "openBrowser": {
         const url = resolveUrlForOpen(intent.url, options.defaultUrl);
         operations.push({ kind: "openBrowser", url });
@@ -159,6 +290,20 @@ export function compileActions(
       }
       case "click":
       case "tap": {
+        if (binding?.orPath) {
+          const loc = orPathLocator(binding.orPath, binding.orLabel ?? binding.orPath);
+          state.setFromLocator(loc);
+          const stepComment = stepCommentFromEmbeddedHint(
+            intent.kind === "tap" ? "tap" : "click",
+            intent.targetHint
+          );
+          operations.push({
+            kind: intent.kind === "tap" ? "tap" : "click",
+            loc,
+            ...(stepComment ? { stepComment } : {}),
+          });
+          break;
+        }
         const loc = ensureLoc(intent.targetHint, intentIdx, "click", intent.kind);
         state.setFromLocator(loc);
         const stepComment = stepCommentFromEmbeddedHint(
@@ -181,6 +326,18 @@ export function compileActions(
       }
       case "setText":
       case "mobileSetText": {
+        if (binding?.orPath) {
+          const loc = orPathLocator(binding.orPath, binding.orLabel ?? binding.orPath);
+          state.setFromLocator(loc);
+          const stepComment = stepCommentFromEmbeddedHint("type", intent.targetHint);
+          operations.push({
+            kind: intent.kind === "mobileSetText" ? "mobileSetText" : "setText",
+            loc,
+            text: intent.text,
+            ...(stepComment ? { stepComment } : {}),
+          });
+          break;
+        }
         if (options.platform === "mobile" && !intent.text?.trim()) {
           errors.push(
             `mobileSetText: missing value — add quoted text, e.g. type \"john\" in username (step: "${(intent as any).targetHint ?? ""}")`

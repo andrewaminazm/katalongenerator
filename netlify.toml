@@ -5,8 +5,13 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# API calls go directly to the Render backend (configured via VITE_API_URL).
-# No /api/* redirect needed here — the frontend uses the full Render URL.
+# API: same-origin /api → Netlify Function (set GOSI_BRAIN_* in Netlify env vars).
+# Optional: set VITE_API_URL to an external backend (e.g. Render) at build time instead.
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api"
+  status = 200
+  force  = true
 
 # SPA fallback: React / Vite client-side routing
 [[redirects]]

@@ -20,6 +20,8 @@ export interface PromptExtraOptions {
   stylePass?: StylePass;
   /** Heuristic step → OR lines from server-side matcher */
   orSuggestionsText?: string;
+  /** Team style profile from AI Memory (injected before generation profile) */
+  aiMemoryInjection?: string;
 }
 
 function buildGenerationProfileBlock(
@@ -408,6 +410,9 @@ export function buildKatalonPrompt(params: {
   })();
   const extras = params.promptExtras;
   const profileBlock = buildGenerationProfileBlock(extras ?? {}, Boolean(projectCtx));
+  const aiMemoryBlock = extras?.aiMemoryInjection?.trim()
+    ? `${extras.aiMemoryInjection.trim()}\n`
+    : "";
   const orSuggestionsBlock = extras?.orSuggestionsText?.trim()
     ? `${extras.orSuggestionsText.trim()}\n\n`
     : "";
@@ -520,7 +525,7 @@ ${testCaseName ? `Test case name (for comments only): ${testCaseName}\n` : ""}TA
 ${platformRules}
 ${locatorRulesWeb}${locatorRulesMobile}
 ${buildProductionScriptContract(platform)}
-${profileBlock}
+${aiMemoryBlock}${profileBlock}
 ${projectBlock}
 ${antiInventBlock}
 ${stepFidelityBlock}

@@ -3,6 +3,9 @@ dist/
 *.log
 .DS_Store
 server/data/history.json
+server/data/failure-memory/
+server/src/data/projects/
+server/src/data/ai-memory/
 .env
 server/.env
 client/dist/

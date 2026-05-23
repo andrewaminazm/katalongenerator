@@ -10,7 +10,8 @@
     "playwright:install": "playwright install chromium",
     "extract-locators": "tsx scripts/extract-playwright-locators.ts",
     "docs:pdf": "tsx scripts/generate-project-guide-pdf.ts",
-    "docs:user-pdf": "tsx scripts/generate-project-guide-pdf.ts USER_GUIDE"
+    "docs:user-pdf": "tsx scripts/generate-project-guide-pdf.ts USER_GUIDE",
+    "test": "tsx --test src/services/testDsl/keywordCreateIntent.test.ts src/services/katalonCompiler/keywordTemplateGenerator.test.ts src/services/katalonCompiler/keywordFromTestSteps.test.ts src/services/katalonCompiler/forcedOutputFromSteps.test.ts src/services/groovyGenerator/groovyUtility.test.ts src/services/groovyArchitecture/groovyArchitecture.test.ts src/services/aiMemory/aiMemory.test.ts src/services/projectIntelligence/projectUrlResolver.test.ts src/services/projectIntelligence/semanticMatcher.test.ts src/services/failureAnalysis/failureAnalyzer.test.ts src/services/failureAnalysis/katalonExecutionLogAnalyzer.test.ts src/services/aiOrchestrator/aiOrchestrator.test.ts"
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -20,6 +21,7 @@
     "express": "^4.21.1",
     "fast-xml-parser": "^4.5.0",
     "multer": "^1.4.5-lts.1",
+    "node-unrar-js": "^2.0.2",
     "playwright": "^1.49.1",
     "serverless-http": "^4.0.0"
   },

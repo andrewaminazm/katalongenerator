@@ -87,6 +87,35 @@ export interface GenerateRequestBody {
    * When omitted with `mode: "record"`, the server defaults to true (lossless replay).
    */
   preserveRecordingFidelity?: boolean;
+  /** Indexed Katalon project from POST /api/projects/upload */
+  projectId?: string;
+  /** How aggressively to reuse project keywords and OR paths */
+  projectGenerationMode?: "strict_reuse" | "balanced" | "generate_everything";
+  /**
+   * Code generation target: test script, Katalon keyword, Groovy utility, or auto-detect from steps.
+   */
+  codeGenerationMode?:
+    | "auto"
+    | "test_script"
+    | "custom_keyword"
+    | "groovy_function"
+    | "utility_class"
+    | "framework_helper";
+  /** AI Memory: learn team style from active project (default learn_suggest when project selected). */
+  aiMemoryMode?: "disabled" | "learn_only" | "learn_suggest" | "adaptive";
+  /**
+   * When set, `/api/generate` runs through the AI Automation Orchestrator pipeline
+   * instead of the legacy single-path compiler.
+   */
+  orchestrationMode?:
+    | "basic"
+    | "advanced"
+    | "autonomous"
+    | "architecture_review"
+    | "self_healing"
+    | "conversational";
+  /** Primary engineering prompt when steps are empty or ambiguous */
+  prompt?: string;
 }
 
 /** Lint output returned with non-streaming /api/generate. */

@@ -1,3 +1,5 @@
+import type { ParsedKeywordClass } from "../projectIntelligence/types.js";
+
 /** Locator strategy for Katalon addProperty — one per TestObject. */
 export type LocatorKind =
   | "id"
@@ -51,6 +53,8 @@ export type StepIntent =
   | { kind: "tap"; targetHint: string }
   | { kind: "mobileSetText"; targetHint: string; text: string }
   | { kind: "swipe" }
+  | { kind: "callKeyword"; ref: string; raw?: string }
+  | { kind: "comment"; raw: string }
   | { kind: "unknown"; raw: string };
 
 export interface CompileKatalonInput {
@@ -71,6 +75,17 @@ export interface CompileKatalonInput {
    * per step. Used if label-based lookup fails (Unicode / label drift).
    */
   playwrightContextSelectors?: (string | undefined)[];
+  /** Per-step bindings from project intelligence (keyword / OR reuse). */
+  projectBindingsByStepIndex?: Record<
+    number,
+    {
+      orPath?: string;
+      orLabel?: string;
+      keywordCall?: string;
+    }
+  >;
+  /** Indexed project keywords — used to resolve `use keyword` / `Class.method` at compile time. */
+  projectKeywords?: ParsedKeywordClass[];
 }
 
 export interface CompileKatalonResult {

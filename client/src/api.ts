@@ -2,6 +2,18 @@
 // In local dev it stays empty so Vite's proxy forwards /api/* to localhost:8787.
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
+/** Shown when /health reports Gosi Brain is not configured (matches server hint logic). */
+export function defaultGosiConfigHint(): string {
+  const base = API_BASE.toLowerCase();
+  if (base.includes("onrender.com")) {
+    return "Add GOSI_BRAIN_CHAT_URL and GOSI_BRAIN_API_KEY in Render → Environment, then redeploy.";
+  }
+  if (import.meta.env.PROD && !base) {
+    return "Add GOSI_BRAIN_CHAT_URL and GOSI_BRAIN_API_KEY in Netlify → Environment variables, then redeploy.";
+  }
+  return "Add GOSI_BRAIN_CHAT_URL and GOSI_BRAIN_API_KEY to server/.env, then restart the backend.";
+}
+
 export type Platform = "web" | "mobile";
 
 export type LlmProvider = "gosi-brain";
@@ -95,6 +107,81 @@ export interface GeneratePayload {
    * strict step-count match; Groovy optimizers skipped on server.
    */
   preserveRecordingFidelity?: boolean;
+  projectId?: string;
+  projectGenerationMode?: "strict_reuse" | "balanced" | "generate_everything";
+  /** Team style memory from indexed Katalon project (requires projectId). */
+  aiMemoryMode?: AiMemoryMode;
+}
+
+export type AiMemoryMode = "disabled" | "learn_only" | "learn_suggest" | "adaptive";
+
+export interface StyleMatchReport {
+  styleMatchScore: number;
+  reusedHelpers: string[];
+  matchedPatterns: string[];
+  matchedArchitecture: string[];
+}
+
+export type ProjectGenerationMode = "strict_reuse" | "balanced" | "generate_everything";
+
+export interface ProjectMeta {
+  projectId: string;
+  projectName: string;
+  uploadDate: string;
+  sourceType: "zip" | "rar" | "folder";
+  stats: {
+    testObjects: number;
+    keywords: number;
+    keywordMethods: number;
+    testScripts: number;
+    testCases?: number;
+    testSuites: number;
+    profiles: number;
+    groovyLibs: number;
+    parseErrors: number;
+  };
+}
+
+export interface ProjectIndexSummary extends ProjectMeta {
+  testObjects: { label: string; path: string; selectorType: string }[];
+  keywords: { className: string; customKeywordsPath: string; methods: { name: string; signature: string }[] }[];
+  testScripts?: {
+    logicalPath: string;
+    scriptPath: string;
+    displayName: string;
+    kind: string;
+  }[];
+  testCases?: ProjectIndexSummary["testScripts"];
+  reusableFlows: { id: string; name: string; description: string }[];
+}
+
+export async function listKatalonProjects(): Promise<ProjectMeta[]> {
+  const res = await fetch(`${API_BASE}/api/projects`);
+  const data = (await res.json().catch(() => ({}))) as { projects?: ProjectMeta[]; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data.projects ?? [];
+}
+
+export async function uploadKatalonProjectZip(
+  file: File,
+  projectName?: string
+): Promise<ProjectIndexSummary> {
+  const fd = new FormData();
+  fd.append("archive", file);
+  if (projectName?.trim()) fd.append("projectName", projectName.trim());
+  const res = await fetch(`${API_BASE}/api/projects/upload`, { method: "POST", body: fd });
+  const data = (await res.json().catch(() => ({}))) as { project?: ProjectIndexSummary; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!data.project) throw new Error("No project returned");
+  return data.project;
+}
+
+export async function fetchKatalonProject(projectId: string): Promise<ProjectIndexSummary> {
+  const res = await fetch(`${API_BASE}/api/projects/${encodeURIComponent(projectId)}`);
+  const data = (await res.json().catch(() => ({}))) as { project?: ProjectIndexSummary; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!data.project) throw new Error("Project not found");
+  return data.project;
 }
 
 export interface LintIssue {
@@ -102,6 +189,39 @@ export interface LintIssue {
   severity: "error" | "warning" | "info";
   line?: number;
   message: string;
+}
+
+export interface ProjectIntelligenceBinding {
+  stepIndex: number;
+  testObjectPath?: string;
+  keywordCall?: string;
+  confidence?: number;
+}
+
+export type GenerationMode =
+  | "test_case"
+  | "keyword_template"
+  | "groovy_utility"
+  | "hybrid"
+  | "mixed_fallback";
+
+export type CodeGenerationMode =
+  | "auto"
+  | "test_script"
+  | "custom_keyword"
+  | "groovy_function"
+  | "utility_class"
+  | "framework_helper"
+  | "page_object"
+  | "api_helper"
+  | "db_utility"
+  | "framework_service";
+
+export interface KeywordTemplateMeta {
+  className: string;
+  methodName: string;
+  platform: "web" | "mobile" | "api";
+  confidence: number;
 }
 
 export interface GenerateResponse {
@@ -113,6 +233,30 @@ export interface GenerateResponse {
   compilerWarnings?: string[];
   /** True when Groovy came from the deterministic compiler. */
   deterministic?: boolean;
+  /** When set to keyword_template, output is a Custom Keyword class — not a test script. */
+  generationMode?: GenerationMode;
+  keywordTemplate?: KeywordTemplateMeta;
+  groovyUtility?: {
+    className: string;
+    methodName: string;
+    platform: "web" | "mobile" | "api" | "utility";
+    kind: string;
+    confidence: number;
+    subject: string;
+    synthesizedBy: "template" | "generic" | "ai";
+  };
+  projectIntelligence?: {
+    projectId: string;
+    mode: ProjectGenerationMode;
+    bindings: ProjectIntelligenceBinding[];
+    warnings?: string[];
+    suggestions?: string[];
+  };
+  aiMemory?: {
+    mode: AiMemoryMode;
+    styleMatch?: StyleMatchReport;
+  };
+  aiMemorySuggestions?: string[];
 }
 
 export interface ExportKatalonPayload {
@@ -712,8 +856,185 @@ export async function healthCheck(): Promise<{
   ok: boolean;
   gosiBrainConfigured?: boolean;
   defaultGosiBrainModel?: string;
+  gosiConfigHint?: string;
 }> {
   const res = await fetch(`${API_BASE}/api/health`);
   if (!res.ok) throw new Error("Server unreachable");
   return res.json();
+}
+
+// —— AI Failure Analyzer ——
+
+export type FailureType =
+  | "LOCATOR"
+  | "TIMING"
+  | "API"
+  | "ASSERTION"
+  | "ENVIRONMENT"
+  | "TEST_DATA"
+  | "FRAMEWORK"
+  | "BROWSER_AUTOMATION"
+  | "UNKNOWN";
+
+export interface FailureAnalysisPayload {
+  logs?: string;
+  stacktrace?: string;
+  consoleLogs?: string;
+  screenshot?: string;
+  screenshotDescription?: string;
+  apiResponse?: string;
+  harLog?: string;
+  katalonReport?: string;
+  /** Katalon Mobile execution log (Appium-backed). */
+  appiumLog?: string;
+  projectId?: string;
+  executionMetadata?: {
+    testName?: string;
+    failedStep?: string;
+    retryCount?: number;
+    url?: string;
+    platform?: "web" | "mobile" | "api";
+  };
+  authorization_token?: string;
+  model?: string;
+}
+
+export interface SuggestedFix {
+  id: string;
+  title: string;
+  description: string;
+  codeExample?: string;
+  priority: "high" | "medium" | "low";
+  category: string;
+}
+
+export interface DetectedPatternSummary {
+  pattern: string;
+  inference: string;
+  failureType: FailureType;
+  confidence: number;
+}
+
+export interface ExecutionLogInsights {
+  failedTestObject?: string;
+  failedKeyword?: string;
+  failingStepMessage?: string;
+  platform: string;
+  timingSummary: string;
+  retryAttempts: number;
+  parseConfidence: number;
+  warnings: string[];
+}
+
+export interface PlainEnglishReport {
+  headline: string;
+  whatHappened: string;
+  likelyReason: string;
+  stepsToTry: string[];
+  errorSnippet?: string;
+  testName?: string;
+}
+
+export interface FailureAnalysisResult {
+  plainEnglish?: PlainEnglishReport;
+  rootCause: string;
+  rootCauseSummary: string;
+  failureType: FailureType;
+  flakyProbability: number;
+  flakyLevel: "low" | "medium" | "high" | "unknown";
+  confidence: number;
+  rootCauseConfidence: number;
+  suggestedFixConfidence: number;
+  logOnlyMode: boolean;
+  detectedPatterns: DetectedPatternSummary[];
+  executionLogInsights?: ExecutionLogInsights;
+  confidenceNotes?: string;
+  affectedLayer: string;
+  severity: string;
+  reproducibility: string;
+  secondaryFactors: string[];
+  suggestedFixes: SuggestedFix[];
+  recommendedArchitectureImprovements: string[];
+  relatedPatterns: {
+    id: string;
+    signature: string;
+    occurrences: number;
+    lastSeen: string;
+    flakyRate?: number;
+  }[];
+  healingSuggestions: { endpoint: string; description: string; payloadHint?: Record<string, unknown> }[];
+  timeline: { id: string; label: string; kind: string; detail?: string }[];
+  locatorInsights?: {
+    problem: string;
+    recommendation: string;
+    isDynamic: boolean;
+    domChangeLikely: boolean;
+  };
+  timingInsights?: {
+    problem: string;
+    recommendation: string;
+    raceConditionLikely: boolean;
+  };
+  apiInsights?: {
+    problem: string;
+    recommendation: string;
+    statusCode?: number;
+    authIssue: boolean;
+  };
+  screenshotInsights?: string[];
+  architectureInsights: string[];
+  projectContext?: {
+    matchedKeyword?: string;
+    matchedOrPath?: string;
+    sourceFileHint?: string;
+  };
+  aiEnhanced: boolean;
+  uncertainty?: string;
+  analyzedAt: string;
+}
+
+export async function analyzeFailure(
+  payload: FailureAnalysisPayload
+): Promise<FailureAnalysisResult> {
+  const res = await fetch(`${API_BASE}/api/failure/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as FailureAnalysisResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function fetchFailureHistory(): Promise<
+  {
+    id: string;
+    analyzedAt: string;
+    failureType: FailureType;
+    rootCauseSummary: string;
+    confidence: number;
+    flakyProbability: number;
+  }[]
+> {
+  const res = await fetch(`${API_BASE}/api/failure/history`);
+  const data = (await res.json().catch(() => ({}))) as { history?: unknown[]; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return (data.history ?? []) as ReturnType<typeof fetchFailureHistory> extends Promise<infer T>
+    ? T
+    : never;
+}
+
+export async function fetchFailurePatterns(): Promise<
+  {
+    signature: string;
+    failureType: FailureType;
+    count: number;
+    avgFlakyProbability: number;
+    hotspot: boolean;
+  }[]
+> {
+  const res = await fetch(`${API_BASE}/api/failure/patterns`);
+  const data = (await res.json().catch(() => ({}))) as { patterns?: unknown[]; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return (data.patterns ?? []) as Awaited<ReturnType<typeof fetchFailurePatterns>>;
 }

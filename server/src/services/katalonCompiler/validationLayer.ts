@@ -60,3 +60,47 @@ export function validateKatalonGroovy(code: string): ValidationResult {
 
   return { errors, warnings };
 }
+
+/**
+ * Validation for generated Custom Keyword class templates (not test-case scripts).
+ */
+export function validateKeywordTemplateGroovy(
+  code: string,
+  options?: { allowOpenBrowser?: boolean }
+): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const body = code.trim();
+  if (!body) {
+    errors.push("Keyword template is empty.");
+    return { errors, warnings };
+  }
+
+  if (!/\bpackage\s+[\w.]+\b/.test(body)) {
+    errors.push("Keyword template must declare a package.");
+  }
+  if (!/\bclass\s+[A-Z]\w*\b/.test(body)) {
+    errors.push("Keyword template must declare a class.");
+  }
+  if (!/@Keyword\b/.test(body)) {
+    errors.push("Keyword template must include at least one @Keyword method.");
+  }
+  if (/@Test\b|org\.testng|junit\.framework|org\.junit/i.test(body)) {
+    errors.push("Forbidden: TestNG/JUnit in keyword class.");
+  }
+  if (RAW_FIND_ELEMENT.test(body)) {
+    errors.push("Forbidden: raw WebDriver findElement — use findTestObject in keywords.");
+  }
+  if (
+    !options?.allowOpenBrowser &&
+    /\bWebUI\.openBrowser\s*\(/.test(body)
+  ) {
+    errors.push("Keyword templates must not call WebUI.openBrowser — use navigation keywords in test cases.");
+  }
+  if (/\bWebUI\.verifyTextPresent\s*\(\s*['"]{2}/.test(body)) {
+    errors.push("Keyword templates must not emit empty verifyTextPresent.");
+  }
+
+  return { errors, warnings };
+}

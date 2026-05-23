@@ -23,6 +23,7 @@ import { runIntentCompletionOnDsl, rebuildCanonicalSteps } from "./intentComplet
 export function runUniversalTestStepIntelligence(params: {
   input: AnyStepsInput;
   platform: "web" | "mobile";
+  projectDefaultUrl?: string;
 }): NormalizeResult {
   const base = universalStepNormalizer(params);
   if (base.errors.length > 0) {
