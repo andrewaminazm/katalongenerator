@@ -1438,7 +1438,15 @@ export default function App() {
                 onChange={(e) => setLocators(e.target.value)}
                 spellCheck={false}
               />
-              <FieldClearBelow onClear={() => setLocators("")} disabled={!locators.trim()} />
+              <FieldClearBelow
+                onClear={() => {
+                  setLocators("");
+                  // Also hide the conversion report list so "Clear" truly clears the UI.
+                  setConvertReport(null);
+                  setError(null);
+                }}
+                disabled={!locators.trim()}
+              />
             </FieldBlock>
 
             <CheckboxTip
