@@ -16,6 +16,7 @@ import { createProjectGeneratorRouter } from "./routes/projectGeneratorRoutes.js
 import { createProjectRepairRouter } from "./routes/projectRepairRoutes.js";
 import { createWorkspaceMemoryRouter } from "./routes/workspaceMemoryRoutes.js";
 import { createReliabilityRouter } from "./routes/reliabilityRoutes.js";
+import { createExecutionReportRouter } from "./routes/executionReportRoutes.js";
 import { logJiraTlsStartupHint } from "./services/jira.js";
 
 logJiraTlsStartupHint();
@@ -83,6 +84,7 @@ app.use("/api/project-generator", createProjectGeneratorRouter());
 app.use("/api/project-repair", createProjectRepairRouter());
 app.use("/api/workspace-memory", createWorkspaceMemoryRouter());
 app.use("/api/reliability", createReliabilityRouter());
+app.use("/api/execution-report", createExecutionReportRouter());
 
 app.use(
   (

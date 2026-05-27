@@ -13,6 +13,7 @@ import {
   Wrench,
   Zap,
   Hammer,
+  FileBarChart,
 } from "lucide-react";
 
 export type NavItem = {
@@ -51,6 +52,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "refactor", label: "Refactoring Assistant", href: "/refactor", icon: Wrench, badge: "AI" },
       { id: "project-generator", label: "AI Project Generator", href: "/project-generator", icon: Package, badge: "AI" },
       { id: "project-repair", label: "AI Project Repair", href: "/project-repair", icon: Hammer, badge: "AI" },
+      {
+        id: "execution-report",
+        label: "Execution Report",
+        href: "/execution-report",
+        icon: FileBarChart,
+        badge: "AI",
+      },
     ],
   },
   {
@@ -86,6 +94,7 @@ export const COMMAND_ACTIONS: CommandAction[] = [
   { id: "open-refactor", label: "Open Refactoring Assistant", keywords: ["refactor", "duplication", "maintainability"], href: "/refactor" },
   { id: "open-project-generator", label: "Open AI Project Generator", keywords: ["project", "generator", "framework", "scaffold", "architecture"], href: "/project-generator" },
   { id: "open-project-repair", label: "Open AI Project Repair Engine", keywords: ["repair", "fix", "heal", "flaky", "framework recovery"], href: "/project-repair" },
+  { id: "open-execution-report", label: "Open Execution Report Generator", keywords: ["pdf", "report", "execution", "ci", "release"], href: "/execution-report" },
   { id: "open-project", label: "Open Project Intelligence", keywords: ["project", "upload", "or", "keywords"], href: "/#project-intelligence" },
   { id: "api-suite", label: "Create API regression suite", keywords: ["api", "postman", "swagger"], generatorTab: "api" },
   { id: "perf-smoke", label: "Create performance smoke suite", keywords: ["k6", "jmeter", "load", "performance"], generatorTab: "performance" },

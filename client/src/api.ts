@@ -1729,6 +1729,114 @@ export async function fetchWorkspaceMemoryInsights(projectId: string): Promise<M
   return data;
 }
 
+/* ——— AI Execution Report Generator ——— */
+
+export interface ExecutionReportInput {
+  projectName: string;
+  buildId: string;
+  executionDate: string;
+  environment: string;
+  testExecution: {
+    totalTestCases: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    duration: string;
+  };
+  failedTests: Array<{
+    testCaseName: string;
+    module: string;
+    errorMessage: string;
+    failureType?: string;
+    failureSeverity?: string;
+    stackTraceSummary?: string;
+  }>;
+  pipelineName?: string;
+  branch?: string;
+  triggeredBy?: string;
+}
+
+export interface ExecutionReportOutput {
+  pdfTitle: string;
+  executiveSummary: {
+    headline: string;
+    passRatePercent: number;
+    releaseStatement: string;
+    totalTestCases: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    duration: string;
+    releaseStatus: string;
+    severityCounts: { CRITICAL?: number; HIGH?: number; MEDIUM?: number; LOW?: number };
+  };
+  executionOverview: {
+    stabilityScore: number;
+    riskScore: number;
+    environment: string;
+    buildId: string;
+    executionDate: string;
+    ciSummary: string;
+  };
+  severityAnalysis: Record<string, unknown>;
+  moduleRiskAnalysis: Record<string, unknown>;
+  businessFlowImpact: {
+    flows: Array<{ flowName: string; riskScore: number; passRatePercent?: number }>;
+    summary: string;
+  };
+  businessFlowAnalysis: {
+    flows: Array<{ flowName: string; riskScore: number; passRatePercent?: number }>;
+    summary: string;
+  };
+  flakyInsights: Record<string, unknown>;
+  releaseReadiness: {
+    score: number;
+    status: string;
+    confidencePercent: number;
+    blockingIssues: string[];
+    factors: string[];
+  };
+  rootCauseInsights: Array<{ category: string; likelihood: string; summary: string }>;
+  rootCauseAnalysis: Array<{ category: string; likelihood: string; summary: string }>;
+  recommendations: string[];
+  chartData: Record<string, unknown>;
+  pdfLayoutSpec: Record<string, unknown>;
+  generatedAt: string;
+}
+
+export async function fetchExecutionReportSample(): Promise<ExecutionReportInput> {
+  const res = await fetch(`${API_BASE}/api/execution-report/sample`);
+  const data = (await res.json().catch(() => ({}))) as ExecutionReportInput & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function generateExecutionReport(
+  input: ExecutionReportInput
+): Promise<ExecutionReportOutput> {
+  const res = await fetch(`${API_BASE}/api/execution-report/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as ExecutionReportOutput & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function downloadExecutionReportPdf(input: ExecutionReportInput): Promise<Blob> {
+  const res = await fetch(`${API_BASE}/api/execution-report/pdf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || res.statusText);
+  }
+  return res.blob();
+}
+
 /* ——— AI Coverage Analyzer ——— */
 
 export interface CoverageAnalysisResult {

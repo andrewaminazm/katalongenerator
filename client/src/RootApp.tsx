@@ -12,6 +12,7 @@ const CoverageAnalyzer = lazy(() => import("./pages/CoverageAnalyzer"));
 const RefactoringAssistant = lazy(() => import("./pages/RefactoringAssistant"));
 const ProjectGenerator = lazy(() => import("./pages/ProjectGenerator"));
 const ProjectRepair = lazy(() => import("./pages/ProjectRepair"));
+const ExecutionReport = lazy(() => import("./pages/ExecutionReport"));
 
 function PageFallback({ label }: { label: string }) {
   return (
@@ -115,6 +116,22 @@ function RoutedContent({ pathname }: { pathname: string }) {
       >
         <Suspense fallback={<PageFallback label="AI Project Repair" />}>
           <ProjectRepair />
+        </Suspense>
+      </PlatformShell>
+    );
+  }
+
+  if (pathname === "/execution-report" || pathname.startsWith("/execution-report/")) {
+    return (
+      <PlatformShell
+        pathname={pathname}
+        navbar={{
+          title: "AI Execution Report",
+          subtitle: "Executive PDF intelligence from CI execution data",
+        }}
+      >
+        <Suspense fallback={<PageFallback label="Execution Report" />}>
+          <ExecutionReport />
         </Suspense>
       </PlatformShell>
     );
