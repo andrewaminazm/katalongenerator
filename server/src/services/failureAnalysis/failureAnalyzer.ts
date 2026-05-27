@@ -36,6 +36,7 @@ import type {
 } from "./types.js";
 import { loadProjectIndex } from "../projectIntelligence/projectStore.js";
 import { buildMemoryContextForGeneration, resolveAiMemoryMode } from "../aiMemory/index.js";
+import { enrichFailureWithReliability } from "../reliabilityIntelligence/reliabilityAssembler.js";
 
 async function memoryHintsForProject(projectId?: string): Promise<string[]> {
   if (!projectId) return [];
@@ -354,5 +355,12 @@ export async function analyzeFailure(
   );
 
   await recordFailureAnalysis(draft, request.projectId);
+
+  try {
+    draft = await enrichFailureWithReliability(draft, request, corpus);
+  } catch (err) {
+    console.warn("[reliability] enrich skipped:", err instanceof Error ? err.message : err);
+  }
+
   return draft;
 }

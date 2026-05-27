@@ -251,6 +251,49 @@ The generator is **additive and safe**: it does not overwrite your uploaded proj
     mediaPlaceholders: ["AI Project Generator page with architecture preview + structure/health panels"],
   },
   {
+    id: "ai-project-repair-engine",
+    title: "AI Project Repair Engine",
+    category: "intelligence",
+    summary:
+      "Analyze and safely repair unstable Katalon projects — scripts, locators, waits, assertions, architecture (preview + diffs).",
+    keywords: [
+      "repair",
+      "fix",
+      "heal",
+      "flaky",
+      "thread.sleep",
+      "locator repair",
+      "framework recovery",
+      "diff",
+      "rollback",
+    ],
+    content: `AI Project Repair Engine (/project-repair) analyzes indexed Katalon projects like an enterprise maintenance engineer. It detects script issues, weak locators, wait instability, assertion gaps, duplication, dependency orphans, and architecture anti-patterns — then produces prioritized repair suggestions with optional **preview diffs** and **safe auto-repairs** (Thread.sleep → WebUI.delay, import cleanup, deterministic script fixes).
+
+The engine integrates Project Intelligence, AI Memory style hints, and the existing locator healing stack. It **never overwrites** your uploaded project on the server; you review diffs and apply changes in Katalon Studio.`,
+    steps: [
+      "Upload and index a project, then open AI Project Repair from the Gosi Brain sidebar.",
+      "Select the project and run Analyze project.",
+      "Review health, flakiness, suggestions, locator repairs, and risk areas.",
+      "Click Preview repairs to see Groovy diffs for auto-applicable fixes.",
+      "Click Apply safe repairs, then Download repaired project (.zip).",
+      "Import the zip into Katalon Studio (read REPAIR_MANIFEST.md inside the archive).",
+      "Run smoke suites to validate before replacing your production project.",
+    ],
+    tips: [
+      "Run after Coverage or Refactor analysis to align priorities.",
+      "Use Force refresh after re-uploading the project archive.",
+    ],
+    warnings: [
+      "Auto-repairs are conservative — locator and architecture changes are suggest-only.",
+      "Rollback returns original file text; it does not modify the server-side project store.",
+    ],
+    mistakes: [
+      "Expecting the server to patch your zip in place — always download/apply locally.",
+      "Skipping preview before applying repairs on production-critical scripts.",
+    ],
+    mediaPlaceholders: ["Repair dashboard with health cards and diff panel"],
+  },
+  {
     id: "ai-qa-workspace",
     title: "AI QA Workspace",
     category: "intelligence",
@@ -298,6 +341,48 @@ Context travels with every message: active project ID, platform, Gosi Brain memo
       "Expecting one chat message to run Katalon Runtime — generation is export/advisory only.",
     ],
     mediaPlaceholders: ["AI Workspace chat with context panel and suggestion chips"],
+  },
+  {
+    id: "ai-workspace-memory",
+    title: "AI QA Workspace Memory",
+    category: "intelligence",
+    summary:
+      "Persistent enterprise QA intelligence — flows, locators, repairs, and architecture injected into workspace chat.",
+    keywords: [
+      "workspace memory",
+      "semantic search",
+      "knowledge graph",
+      "persistent memory",
+      "flows",
+      "repair memory",
+    ],
+    content: `AI QA Workspace Memory is an additive intelligence layer on top of the existing AI QA Workspace Chat — not a second chat UI.
+
+When a project is selected, the server indexes project structure, reusable flows, OR/locator health, API keywords, repair analysis, architecture graph, and team style from AI Memory. Each chat message triggers semantic retrieval; relevant memories are injected into the Gosi Brain prompt automatically.
+
+Use the Workspace memory panel in the chat sidebar to re-index, search memories, view flows/recommendations/risk hints, and see which memories informed the last reply (citations).
+
+APIs: POST /api/workspace-memory/index, /search, /learn; GET /insights, /flows, /graph, /risk, /recommendations per projectId.`,
+    steps: [
+      "Upload and index a project under Project Intelligence.",
+      "Open Gosi Brain Workspace and select the same Active project.",
+      "Keep Enterprise workspace memory enabled (default).",
+      "Click Re-index memory after major repairs or re-uploads.",
+      "Ask flow/locator/repair questions — e.g. “Show reusable checkout flows” or “Which locators fail most?”.",
+      "Review Last reply used citations after each assistant message.",
+    ],
+    tips: [
+      "Run AI Project Repair analyze first to populate repair and risk memory.",
+      "Semantic search in the sidebar helps explore memory without sending a chat message.",
+    ],
+    warnings: [
+      "Memory stores project patterns only — credentials are redacted; never paste secrets into Learn API.",
+      "Memory is isolated per projectId on disk under server/data/workspace-memory.",
+    ],
+    mistakes: [
+      "Disabling workspace memory and expecting repair/flow context in chat.",
+      "Asking about a project without selecting it in the Context panel.",
+    ],
   },
   {
     id: "project-intelligence",

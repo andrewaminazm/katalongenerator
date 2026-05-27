@@ -4,8 +4,13 @@ dist/
 .DS_Store
 server/data/history.json
 server/data/failure-memory/
+server/data/reliability-memory/
+server/data/workspace-memory/
+server/server/
 server/src/data/projects/
 server/src/data/ai-memory/
+server/src/data/healing-memory.json
+server/src/data/test-runner-memory/
 .env
 server/.env
 client/dist/

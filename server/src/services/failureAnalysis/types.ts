@@ -110,6 +110,8 @@ export interface PlainEnglishReport {
   testName?: string;
 }
 
+import type { ReliabilityIntelligence } from "../reliabilityIntelligence/types.js";
+
 export interface FailureAnalysisResult {
   plainEnglish?: PlainEnglishReport;
   rootCause: string;
@@ -161,6 +163,8 @@ export interface FailureAnalysisResult {
   aiEnhanced: boolean;
   uncertainty?: string;
   analyzedAt: string;
+  /** Enterprise reliability intelligence (additive) */
+  reliability?: ReliabilityIntelligence;
 }
 
 export interface FailureHistoryEntry {

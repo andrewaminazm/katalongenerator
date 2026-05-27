@@ -11,6 +11,7 @@ import { useLayoutContext } from "../components/layout/LayoutContext";
 import { MessageBubble, type ChatMessage } from "../components/chat/MessageBubble";
 import { PromptSuggestions } from "../components/chat/PromptSuggestions";
 import { Button } from "../components/ui/button";
+import { WorkspaceMemoryPanel } from "../components/chat/WorkspaceMemoryPanel";
 import "../components/chat/aiWorkspace.css";
 
 const SESSION_KEY = "katalon:ai_workspace_session";
@@ -38,6 +39,9 @@ export default function AIWorkspace() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [memoryCitations, setMemoryCitations] = useState<
+    WorkspaceChatResponse["memoryCitations"]
+  >([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -83,6 +87,7 @@ export default function AIWorkspace() {
     setSessionId(res.sessionId);
     localStorage.setItem(SESSION_KEY, res.sessionId);
     setSuggestions(res.suggestions);
+    setMemoryCitations(res.memoryCitations ?? []);
     setMessages((prev) => [
       ...prev,
       { id: `u-${Date.now()}`, role: "user", content: userText },
@@ -233,6 +238,26 @@ export default function AIWorkspace() {
                 postmanCollection: e.target.value || undefined,
               }))
             }
+          />
+
+          <label htmlFor="aiw-ws-memory">
+            <input
+              id="aiw-ws-memory"
+              type="checkbox"
+              checked={context.workspaceMemoryEnabled !== false}
+              onChange={(e) =>
+                setContext((c) => ({
+                  ...c,
+                  workspaceMemoryEnabled: e.target.checked,
+                }))
+              }
+            />{" "}
+            Enterprise workspace memory
+          </label>
+
+          <WorkspaceMemoryPanel
+            projectId={context.projectId}
+            lastCitations={memoryCitations}
           />
         </aside>
 

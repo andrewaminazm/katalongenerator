@@ -40,6 +40,15 @@ export interface WorkspaceContextPayload {
   /** Recent manual steps from generator (optional) */
   steps?: string[];
   locators?: string;
+  /** Enterprise workspace memory retrieval (default on when projectId set) */
+  workspaceMemoryEnabled?: boolean;
+}
+
+export interface WorkspaceMemoryCitation {
+  id: string;
+  layer: string;
+  title: string;
+  score: number;
 }
 
 export interface WorkspaceChatRequest {
@@ -75,6 +84,7 @@ export interface WorkspaceChatResponse {
   code?: string;
   model?: string;
   warnings?: string[];
+  memoryCitations?: WorkspaceMemoryCitation[];
 }
 
 export interface WorkspaceSession {

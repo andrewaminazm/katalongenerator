@@ -11,6 +11,7 @@ const AIWorkspace = lazy(() => import("./pages/AIWorkspace"));
 const CoverageAnalyzer = lazy(() => import("./pages/CoverageAnalyzer"));
 const RefactoringAssistant = lazy(() => import("./pages/RefactoringAssistant"));
 const ProjectGenerator = lazy(() => import("./pages/ProjectGenerator"));
+const ProjectRepair = lazy(() => import("./pages/ProjectRepair"));
 
 function PageFallback({ label }: { label: string }) {
   return (
@@ -98,6 +99,22 @@ function RoutedContent({ pathname }: { pathname: string }) {
       >
         <Suspense fallback={<PageFallback label="AI Project Generator" />}>
           <ProjectGenerator />
+        </Suspense>
+      </PlatformShell>
+    );
+  }
+
+  if (pathname === "/project-repair" || pathname.startsWith("/project-repair/")) {
+    return (
+      <PlatformShell
+        pathname={pathname}
+        navbar={{
+          title: "AI Project Repair Engine",
+          subtitle: "Framework recovery with safe previews and diffs",
+        }}
+      >
+        <Suspense fallback={<PageFallback label="AI Project Repair" />}>
+          <ProjectRepair />
         </Suspense>
       </PlatformShell>
     );

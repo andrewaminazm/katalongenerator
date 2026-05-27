@@ -5,17 +5,22 @@ import {
   resolveAiMemoryMode,
   shouldInjectMemory,
 } from "../aiMemory/index.js";
+import { retrieveForChat } from "../workspaceMemory/retrievalEngine.js";
+import type { RetrievalContext } from "../workspaceMemory/types.js";
 import type { WorkspaceContextPayload } from "./types.js";
 
 export interface EnrichedWorkspaceContext {
   payload: WorkspaceContextPayload;
   projectSummary?: string;
   aiMemoryInjection?: string;
+  workspaceMemoryInjection?: string;
+  workspaceMemoryCitations?: RetrievalContext["citations"];
   conversationPrefsSummary?: string;
 }
 
 export async function enrichWorkspaceContext(
-  payload: WorkspaceContextPayload
+  payload: WorkspaceContextPayload,
+  userMessage?: string
 ): Promise<EnrichedWorkspaceContext> {
   const enriched: EnrichedWorkspaceContext = { payload };
 
@@ -43,6 +48,14 @@ export async function enrichWorkspaceContext(
       if (styleCtx?.injectionText) enriched.aiMemoryInjection = styleCtx.injectionText;
     }
 
+    if (payload.workspaceMemoryEnabled !== false && userMessage?.trim()) {
+      const retrieval = await retrieveForChat(payload.projectId, userMessage, 8);
+      if (retrieval?.injectionText) {
+        enriched.workspaceMemoryInjection = retrieval.injectionText;
+        enriched.workspaceMemoryCitations = retrieval.citations;
+      }
+    }
+
     const prefs = await loadConversationPrefs(payload.projectId);
     enriched.conversationPrefsSummary = [
       prefs.prefersKeywords ? "prefers keywords" : null,
@@ -68,6 +81,9 @@ export function buildSystemContextBlock(ctx: EnrichedWorkspaceContext): string {
   if (ctx.payload.platform) lines.push(`Platform: ${ctx.payload.platform}`);
   if (ctx.projectSummary) lines.push(`Active project index: ${ctx.projectSummary}`);
   if (ctx.aiMemoryInjection) lines.push(`Team style (AI memory):\n${ctx.aiMemoryInjection.slice(0, 4000)}`);
+  if (ctx.workspaceMemoryInjection) {
+    lines.push(ctx.workspaceMemoryInjection.slice(0, 8000));
+  }
   if (ctx.conversationPrefsSummary) lines.push(`Conversation prefs: ${ctx.conversationPrefsSummary}`);
   if (ctx.payload.pageUrl) lines.push(`Page URL context: ${ctx.payload.pageUrl}`);
   if (ctx.payload.swagger?.trim()) {

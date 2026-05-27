@@ -1210,6 +1210,80 @@ export interface FailureAnalysisResult {
   aiEnhanced: boolean;
   uncertainty?: string;
   analyzedAt: string;
+  reliability?: ReliabilityIntelligence;
+}
+
+export interface ReliabilityIntelligence {
+  rootCauseConfidence: number;
+  flakyProbability: number;
+  repairSuccessPrediction: number;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  reliabilityScore: number;
+  confidenceExplanation: string[];
+  failureCluster?: string;
+  failureClusterId?: string;
+  locatorHealth?: {
+    orPath: string;
+    label: string;
+    healthScore: number;
+    stabilityScore: number;
+    failureCount: number;
+    healCount: number;
+    reasons: string[];
+    recommendations: string[];
+  };
+  repairRecommendations: Array<{
+    id: string;
+    title: string;
+    description: string;
+    groovySnippet?: string;
+    priority: string;
+    repairSuccessPrediction: number;
+    category: string;
+  }>;
+  preventiveSuggestions: string[];
+  historicalFailures: Array<{
+    id: string;
+    analyzedAt: string;
+    rootCauseSummary: string;
+    failureType: FailureType;
+    similarity: number;
+  }>;
+  regressionImpact?: {
+    impactedTestCases: number;
+    impactedKeywords: number;
+    impactedOrObjects: number;
+    impactedFlows: number;
+    riskScore: number;
+    topDependencies: string[];
+  };
+  environmentInsights: {
+    environmentIssueLikely: boolean;
+    signals: string[];
+    falsePositiveRisk: number;
+    recommendation: string;
+  };
+  businessFlowRisk?: {
+    flowName: string;
+    stabilityScore: number;
+    riskLevel: string;
+    flakyTrend: string;
+    notes: string[];
+  };
+  stabilityTimeline: Array<{ date: string; event: string; impact: string }>;
+  rootCauseGraph: {
+    nodes: Array<{ id: string; label: string; kind: string }>;
+    edges: Array<{ from: string; to: string; relation: string }>;
+  };
+  heatmapSlice: Array<{
+    id: string;
+    label: string;
+    category: string;
+    riskScore: number;
+    failureCount: number;
+  }>;
+  frameworkWeaknesses: string[];
+  riskAnalysis: string;
 }
 
 export async function analyzeFailure(
@@ -1492,6 +1566,39 @@ export interface WorkspaceContextPayload {
   postmanCollection?: string;
   steps?: string[];
   locators?: string;
+  workspaceMemoryEnabled?: boolean;
+}
+
+export interface WorkspaceMemoryCitation {
+  id: string;
+  layer: string;
+  title: string;
+  score: number;
+}
+
+export interface MemoryInsights {
+  projectId: string;
+  projectName: string;
+  memoryChunkCount: number;
+  layerCounts: Record<string, number>;
+  topFlows: Array<{ name: string; description: string }>;
+  repairSummary?: string;
+  riskHints: string[];
+  recommendations: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    layer: string;
+    confidence: number;
+    basedOn: string[];
+  }>;
+  graphSummary: { nodes: number; edges: number };
+}
+
+export interface MemorySearchHit {
+  chunk: { id: string; layer: string; title: string; content: string };
+  score: number;
+  whyRelevant: string;
 }
 
 export interface WorkspaceChatResponse {
@@ -1511,6 +1618,7 @@ export interface WorkspaceChatResponse {
   code?: string;
   model?: string;
   warnings?: string[];
+  memoryCitations?: WorkspaceMemoryCitation[];
 }
 
 const WORKSPACE_GOSI_TOKEN_KEY = "katalon:gosi_token";
@@ -1568,6 +1676,55 @@ export async function fetchWorkspaceHistory(sessionId: string): Promise<{
     context: WorkspaceContextPayload;
     error?: string;
   };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function indexWorkspaceMemory(projectId: string): Promise<{
+  projectId: string;
+  projectName: string;
+  chunkCount: number;
+  indexedAt: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/workspace-memory/index`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    projectId?: string;
+    projectName?: string;
+    chunkCount?: number;
+    indexedAt?: string;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data as { projectId: string; projectName: string; chunkCount: number; indexedAt: string };
+}
+
+export async function searchWorkspaceMemory(
+  projectId: string,
+  query: string,
+  limit = 10
+): Promise<{ projectId: string; query: string; hits: MemorySearchHit[] }> {
+  const res = await fetch(`${API_BASE}/api/workspace-memory/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, query, limit }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    hits?: MemorySearchHit[];
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data as { projectId: string; query: string; hits: MemorySearchHit[] };
+}
+
+export async function fetchWorkspaceMemoryInsights(projectId: string): Promise<MemoryInsights> {
+  const res = await fetch(
+    `${API_BASE}/api/workspace-memory/insights/${encodeURIComponent(projectId)}`
+  );
+  const data = (await res.json().catch(() => ({}))) as MemoryInsights & { error?: string };
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }
@@ -1753,6 +1910,119 @@ export async function analyzeRefactor(payload: {
 export async function fetchRefactorProject(projectId: string): Promise<RefactorAnalysisResult> {
   const res = await fetch(`${API_BASE}/api/refactor/project/${encodeURIComponent(projectId)}`);
   const data = (await res.json().catch(() => ({}))) as RefactorAnalysisResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export interface ProjectRepairSuggestion {
+  id: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  priority: number;
+  title: string;
+  detail: string;
+  whyItMatters: string;
+  affectedFiles: string[];
+  suggestedFix: string;
+  autoApplicable: boolean;
+  beforeExample?: string;
+  afterExample?: string;
+}
+
+export interface ProjectRepairDiff {
+  filePath: string;
+  category: string;
+  suggestionId: string;
+  original: string;
+  repaired: string;
+  diffSummary: string[];
+  changed: boolean;
+  lintPassed: boolean;
+  lintWarnings: string[];
+}
+
+export interface ProjectRepairResult {
+  repairId: string;
+  projectId: string;
+  projectName: string;
+  analyzedAt: string;
+  fromCache: boolean;
+  healthScore: number;
+  flakinessScore: number;
+  frameworkHealth: {
+    maintainabilityScore: number;
+    locatorQualityScore: number;
+    assertionQualityScore: number;
+    architectureQualityScore: number;
+    flakinessScore: number;
+    duplicationScore: number;
+    scalabilityScore: number;
+    overallHealthScore: number;
+  };
+  repairSuggestions: ProjectRepairSuggestion[];
+  locatorRepairs: Array<{
+    orPath: string;
+    label: string;
+    problem: string;
+    oldLocator: { type: string; value: string };
+    newLocator?: { type: string; value: string };
+    confidence: number;
+  }>;
+  duplicateFlows: Array<{ pattern: string; scripts: string[]; suggestedKeyword?: string }>;
+  architectureWarnings: Array<{ area: string; warning: string; recommendation: string }>;
+  riskAreas: Array<{ module: string; riskScore: number; reasons: string[]; repairPriority: number }>;
+  dependencyIssues: Array<{ kind: string; from: string; to: string; message: string }>;
+  repairDiffs: ProjectRepairDiff[];
+  repairedFiles: ProjectRepairDiff[];
+  rollbackAvailable: boolean;
+  rollbackId?: string;
+  downloadableZip?: string;
+  warnings: string[];
+  mode: string;
+}
+
+export async function analyzeProjectRepair(payload: {
+  projectId: string;
+  forceRefresh?: boolean;
+  maxScripts?: number;
+}): Promise<ProjectRepairResult> {
+  const res = await fetch(`${API_BASE}/api/project-repair/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as ProjectRepairResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function previewProjectRepair(payload: {
+  projectId: string;
+  repairId: string;
+  suggestionIds?: string[];
+}): Promise<ProjectRepairResult> {
+  const res = await fetch(`${API_BASE}/api/project-repair/preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as ProjectRepairResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function executeProjectRepair(payload: {
+  projectId: string;
+  repairId: string;
+  suggestionIds?: string[];
+}): Promise<ProjectRepairResult> {
+  const res = await fetch(`${API_BASE}/api/project-repair/repair`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as ProjectRepairResult & { error?: string };
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
 }

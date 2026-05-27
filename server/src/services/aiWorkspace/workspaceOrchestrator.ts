@@ -22,7 +22,7 @@ export async function handleWorkspaceChat(req: WorkspaceChatRequest): Promise<Wo
 
   const context = req.context ?? {};
   const session = await getOrCreateSession(req.sessionId, context);
-  const enriched = await enrichWorkspaceContext(session.context);
+  const enriched = await enrichWorkspaceContext(session.context, message);
 
   const route = routeWorkspaceIntent(message, context.steps);
   const agentResult = await runWorkspaceAgent(route, message, enriched, req);
@@ -63,5 +63,6 @@ export async function handleWorkspaceChat(req: WorkspaceChatRequest): Promise<Wo
     code: agentResult.code,
     model: agentResult.model,
     warnings: agentResult.warnings,
+    memoryCitations: enriched.workspaceMemoryCitations,
   };
 }

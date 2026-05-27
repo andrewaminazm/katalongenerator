@@ -5,6 +5,7 @@ import { PlainEnglishSummary } from "./PlainEnglishSummary";
 import { SuggestedFixes } from "./SuggestedFixes";
 import { ScreenshotViewer } from "./ScreenshotViewer";
 import { TechnicalDetailsPanel } from "./TechnicalDetailsPanel";
+import { ReliabilityIntelligencePanel } from "./ReliabilityIntelligencePanel";
 
 export function FailureAnalyzerResults() {
   const { loading, result, screenshotPreview } = useFailureAnalyzer();
@@ -26,6 +27,7 @@ export function FailureAnalyzerResults() {
       {result && (
         <div className="fa-results-stack">
           <PlainEnglishSummary result={result} />
+          <ReliabilityIntelligencePanel result={result} />
           <SuggestedFixes result={result} />
           <ScreenshotViewer previewUrl={screenshotPreview} insights={result.screenshotInsights} />
           <TechnicalDetailsPanel result={result} />

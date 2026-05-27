@@ -13,6 +13,9 @@ import { createAiWorkspaceRouter } from "./routes/aiWorkspaceRoutes.js";
 import { createCoverageRouter } from "./routes/coverageRoutes.js";
 import { createRefactorRouter } from "./routes/refactorRoutes.js";
 import { createProjectGeneratorRouter } from "./routes/projectGeneratorRoutes.js";
+import { createProjectRepairRouter } from "./routes/projectRepairRoutes.js";
+import { createWorkspaceMemoryRouter } from "./routes/workspaceMemoryRoutes.js";
+import { createReliabilityRouter } from "./routes/reliabilityRoutes.js";
 import { logJiraTlsStartupHint } from "./services/jira.js";
 
 logJiraTlsStartupHint();
@@ -77,6 +80,9 @@ app.use("/api/ai-workspace", createAiWorkspaceRouter());
 app.use("/api/coverage", createCoverageRouter());
 app.use("/api/refactor", createRefactorRouter());
 app.use("/api/project-generator", createProjectGeneratorRouter());
+app.use("/api/project-repair", createProjectRepairRouter());
+app.use("/api/workspace-memory", createWorkspaceMemoryRouter());
+app.use("/api/reliability", createReliabilityRouter());
 
 app.use(
   (

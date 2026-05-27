@@ -108,6 +108,108 @@
   font-family: var(--font-code);
 }
 
+.aiw-memory-panel {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.aiw-memory-panel h3,
+.aiw-memory-panel h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.aiw-memory-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.aiw-memory-muted {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.aiw-memory-error {
+  margin: 0.25rem 0;
+  font-size: 0.72rem;
+  color: var(--danger);
+}
+
+.aiw-memory-actions {
+  margin-bottom: 0.5rem;
+}
+
+.aiw-memory-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.aiw-memory-block {
+  margin: 0.5rem 0;
+}
+
+.aiw-memory-block ul {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.72rem;
+}
+
+.aiw-memory-block li {
+  margin: 0.25rem 0;
+}
+
+.aiw-memory-block li strong {
+  display: block;
+}
+
+.aiw-memory-block li span {
+  color: var(--muted);
+}
+
+.aiw-memory-search-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.aiw-memory-search-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.aiw-memory-layer {
+  display: inline-block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--accent, var(--primary));
+  margin-right: 0.35rem;
+}
+
+.aiw-memory-score {
+  margin-left: 0.35rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.aiw-memory-search-hits li {
+  list-style: none;
+  margin-left: -1rem;
+}
+
 .aiw-chat-main {
   display: flex;
   flex-direction: column;

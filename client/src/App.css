@@ -1607,3 +1607,102 @@ label.btn {
   font-family: var(--font-code);
   font-size: var(--text-code);
 }
+
+.fa-reliability-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  background: var(--surface);
+  margin-bottom: 0.75rem;
+}
+
+.fa-reliability-title {
+  margin: 0 0 0.75rem;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.fa-reliability-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.fa-reliability-score-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+}
+
+.fa-reliability-score-card strong {
+  font-size: 1rem;
+  margin-top: 0.15rem;
+}
+
+.fa-reliability-label {
+  color: var(--muted);
+}
+
+.fa-risk-badge.fa-risk-high strong {
+  color: #ef4444;
+}
+
+.fa-risk-badge.fa-risk-medium strong {
+  color: #d97706;
+}
+
+.fa-reliability-section {
+  margin-top: 0.5rem;
+}
+
+.fa-reliability-section h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+}
+
+.fa-smart-repair {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.fa-groovy-snippet {
+  margin: 0.35rem 0 0;
+  padding: 0.5rem;
+  font-family: var(--font-code);
+  font-size: 0.7rem;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.fa-heatmap-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.fa-heatmap-cell {
+  font-size: 0.68rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.fa-timeline-list,
+.fa-graph-list {
+  font-size: 0.72rem;
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.fa-timeline-date {
+  color: var(--muted);
+  margin-right: 0.35rem;
+}
