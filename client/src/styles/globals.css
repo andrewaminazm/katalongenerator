@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Bridge legacy CSS variables → Tailwind theme tokens */
+@theme {
+  --font-sans: "Roboto", system-ui, sans-serif;
+  --font-display: "Poppins", system-ui, sans-serif;
+  --font-mono: "Source Code Pro", ui-monospace, monospace;
+
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-surface: var(--surface);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-danger: var(--danger);
+  --color-code-bg: var(--code-bg);
+  --color-code-fg: var(--code-fg);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.06);
+  --shadow-glow: 0 0 0 1px rgb(13 110 110 / 0.12), 0 8px 24px rgb(13 110 110 / 0.15);
+}
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply border border-border/80 bg-surface/80 backdrop-blur-xl;
+  }
+
+  .gradient-mesh {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgb(61 184 184 / 0.12), transparent),
+      var(--bg);
+  }
+
+  [data-theme="dark"] .gradient-mesh {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgb(61 184 184 / 0.18), transparent),
+      var(--bg);
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent to-teal-400 bg-clip-text text-transparent;
+  }
+}

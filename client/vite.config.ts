@@ -1,8 +1,9 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig(({ command }) => ({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     // Proxy is only needed in local dev. In production (Netlify) the

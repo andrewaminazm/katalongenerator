@@ -1,3 +1,27 @@
+.aiw-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0;
+}
+
+.aiw-root--embedded {
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.aiw-root--embedded .aiw-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.aiw-new-chat-btn {
+  flex-shrink: 0;
+}
+
 .aiw-root {
   min-height: 100%;
   display: flex;

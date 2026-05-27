@@ -1,8 +1,11 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const BUBBLE_MAX_W = 300;
+const BUBBLE_MAX_H = 220;
 const BUBBLE_EST_HEIGHT = 120;
 const TIP_SHOW_DELAY_MS = 180;
+const TIP_HIDE_DELAY_MS = 120;
 
 export type TipPlacement = "auto" | "above" | "below";
 
@@ -29,67 +32,143 @@ function placeBubble(el: HTMLElement, placement: TipPlacement = "auto"): { top: 
   return { top, left };
 }
 
-/** Visible help control — hover/focus shows tooltip (fixed, not clipped by scroll). */
+type TipBubbleProps = {
+  tip: string;
+  pos: { top: number; left: number };
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+};
+
+/** Rendered on document.body so scroll/overflow in panels does not detach the bubble from the ℹ icon. */
+function TipBubble({ tip, pos, onMouseEnter, onMouseLeave }: TipBubbleProps) {
+  return createPortal(
+    <span
+      className="field-tip-bubble field-tip-bubble--portal"
+      role="tooltip"
+      style={{
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        maxWidth: BUBBLE_MAX_W,
+        maxHeight: BUBBLE_MAX_H,
+        overflowY: "auto",
+        zIndex: 10000,
+      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {tip}
+    </span>,
+    document.body
+  );
+}
+
+/** Visible help control — hover/focus shows tooltip anchored to the ℹ icon. */
 export function TipIcon({ tip, placement = "auto" }: { tip: string; placement?: TipPlacement }) {
   const triggerRef = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = useCallback(() => {
-    if (showTimerRef.current) clearTimeout(showTimerRef.current);
-    showTimerRef.current = setTimeout(() => {
-      const el = triggerRef.current;
-      if (el) setPos(placeBubble(el, placement));
-    }, TIP_SHOW_DELAY_MS);
-  }, [placement]);
-
-  const hide = useCallback(() => {
+  const clearShowTimer = useCallback(() => {
     if (showTimerRef.current) {
       clearTimeout(showTimerRef.current);
       showTimerRef.current = null;
     }
-    setPos(null);
   }, []);
 
+  const clearHideTimer = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const reposition = useCallback(() => {
+    const el = triggerRef.current;
+    if (el) setPos(placeBubble(el, placement));
+  }, [placement]);
+
+  const show = useCallback(() => {
+    clearHideTimer();
+    clearShowTimer();
+    showTimerRef.current = setTimeout(reposition, TIP_SHOW_DELAY_MS);
+  }, [clearHideTimer, clearShowTimer, reposition]);
+
+  const hide = useCallback(() => {
+    clearShowTimer();
+    clearHideTimer();
+    setPos(null);
+  }, [clearShowTimer, clearHideTimer]);
+
+  const scheduleHide = useCallback(() => {
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(hide, TIP_HIDE_DELAY_MS);
+  }, [clearHideTimer, hide]);
+
+  const cancelScheduledHide = useCallback(() => {
+    clearHideTimer();
+  }, [clearHideTimer]);
+
+  useEffect(() => {
+    if (!pos) return;
+    const onScrollOrResize = () => reposition();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [pos, reposition]);
+
+  useEffect(() => {
+    if (!pos) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t)) return;
+      hide();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") hide();
+    };
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [pos, hide]);
+
   return (
-    <span
-      ref={triggerRef}
-      className={`field-tip-trigger${pos ? " field-tip-trigger--open" : ""}`}
-      tabIndex={0}
-      role="button"
-      aria-label={`Help: ${tip}`}
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onFocus={show}
-      onBlur={hide}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          show();
-        }
-      }}
-    >
-      <span className="field-tip-icon" aria-hidden="true">
-        i
-      </span>
+    <>
       <span
-        className="field-tip-bubble"
-        role="tooltip"
-        style={
-          pos
-            ? {
-                position: "fixed",
-                top: pos.top,
-                left: pos.left,
-                maxWidth: BUBBLE_MAX_W,
-                zIndex: 10000,
-              }
-            : undefined
-        }
+        ref={triggerRef}
+        className={`field-tip-trigger${pos ? " field-tip-trigger--open" : ""}`}
+        tabIndex={0}
+        role="button"
+        aria-label={`Field help: ${tip}`}
+        title="Short hint"
+        onMouseEnter={show}
+        onMouseLeave={scheduleHide}
+        onFocus={(e) => {
+          if (e.target === triggerRef.current && e.currentTarget.matches(":focus-visible")) show();
+        }}
+        onBlur={hide}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            reposition();
+          }
+        }}
       >
-        {tip}
+        <span className="field-tip-icon" aria-hidden="true">
+          i
+        </span>
       </span>
-    </span>
+      {pos && (
+        <TipBubble tip={tip} pos={pos} onMouseEnter={cancelScheduledHide} onMouseLeave={scheduleHide} />
+      )}
+    </>
   );
 }
 
@@ -234,4 +313,3 @@ export function LinkWithTip({ tip, href, children, className, tipPlacement = "au
     </span>
   );
 }
-

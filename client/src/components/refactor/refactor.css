@@ -1,3 +1,8 @@
+.ref-root--embedded {
+  min-height: 0;
+  height: 100%;
+}
+
 .ref-root {
   min-height: 100%;
   display: flex;

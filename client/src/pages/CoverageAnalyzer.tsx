@@ -5,10 +5,13 @@ import {
   type CoverageAnalysisResult,
   type ProjectMeta,
 } from "../api";
+import { useLayoutContext } from "../components/layout/LayoutContext";
+import { PageInfoGuide } from "../components/PageInfoGuide";
 import { CoverageDashboard } from "../components/coverage/CoverageDashboard";
 import "../components/coverage/coverage.css";
 
 export default function CoverageAnalyzer() {
+  const { embedded } = useLayoutContext();
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [projectId, setProjectId] = useState("");
   const [swagger, setSwagger] = useState("");
@@ -52,29 +55,36 @@ export default function CoverageAnalyzer() {
   };
 
   return (
-    <div className="cov-root">
-      <header className="cov-header">
-        <div>
-          <h1>AI Coverage Analyzer</h1>
-          <p>Coverage gaps, risk scoring, OR/keyword health, API and business-flow intelligence</p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <a href="/" className="cov-btn cov-btn-primary cov-link">
-            ← Generator
-          </a>
-          <a href="/ai-workspace" className="cov-btn cov-link">
-            AI Workspace
-          </a>
-          <a href="/refactor" className="cov-btn cov-link">
-            Refactor
-          </a>
-          <a href="/how-to-use" className="cov-btn cov-link">
-            Documentation
-          </a>
-        </div>
-      </header>
+    <div className={embedded ? "cov-root cov-root--embedded" : "cov-root"}>
+      {!embedded && (
+        <header className="cov-header">
+          <div>
+            <h1>AI Coverage Analyzer</h1>
+            <p>Coverage gaps, risk scoring, OR/keyword health, API and business-flow intelligence</p>
+          </div>
+        </header>
+      )}
 
       <main className="cov-main">
+        <PageInfoGuide title="How this works">
+          <ul>
+            <li>Select an indexed Katalon project, then run <strong>Analyze coverage</strong>.</li>
+            <li>
+              Optional: paste <strong>OpenAPI / Swagger</strong> to find API endpoints missing from your tests.
+            </li>
+            <li>
+              Review coverage %, risk score, module heatmap, and Gosi Brain recommendations (OR, assertions,
+              flows, APIs).
+            </li>
+            <li>
+              <strong>Read-only</strong> — results are cached until the index changes or you force refresh.
+            </li>
+          </ul>
+          <p className="page-info-hint">
+            Tip: use <strong>?</strong> Help → Gosi Brain Coverage Analyzer for the full guide.
+          </p>
+        </PageInfoGuide>
+
         <div className="cov-toolbar">
           <label>
             Project

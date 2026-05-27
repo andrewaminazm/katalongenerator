@@ -1,3 +1,12 @@
+.cov-root--embedded {
+  min-height: 0;
+  height: 100%;
+}
+
+.cov-root--embedded .cov-header {
+  display: none;
+}
+
 .cov-root {
   min-height: 100%;
   display: flex;

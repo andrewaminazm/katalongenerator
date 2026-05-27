@@ -5,10 +5,13 @@ import {
   type ProjectMeta,
   type RefactorAnalysisResult,
 } from "../api";
+import { useLayoutContext } from "../components/layout/LayoutContext";
+import { PageInfoGuide } from "../components/PageInfoGuide";
 import { RefactorDashboard } from "../components/refactor/RefactorDashboard";
 import "../components/refactor/refactor.css";
 
 export default function RefactoringAssistant() {
+  const { embedded } = useLayoutContext();
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [projectId, setProjectId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -47,32 +50,38 @@ export default function RefactoringAssistant() {
   };
 
   return (
-    <div className="ref-root">
-      <header className="ref-header">
-        <div>
-          <h1>AI Refactoring Assistant</h1>
-          <p>
-            SonarQube-style maintainability analysis — duplication, OR, keywords, waits, and architecture
-            recommendations (read-only)
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <a href="/" className="ref-btn ref-btn-primary ref-link">
-            ← Generator
-          </a>
-          <a href="/coverage" className="ref-btn ref-link">
-            Coverage
-          </a>
-          <a href="/ai-workspace" className="ref-btn ref-link">
-            AI Workspace
-          </a>
-          <a href="/how-to-use" className="ref-btn ref-link">
-            Documentation
-          </a>
-        </div>
-      </header>
+    <div className={embedded ? "ref-root ref-root--embedded" : "ref-root"}>
+      {!embedded && (
+        <header className="ref-header">
+          <div>
+            <h1>AI Refactoring Assistant</h1>
+            <p>
+              SonarQube-style maintainability analysis — duplication, OR, keywords, waits, and architecture
+              recommendations (read-only)
+            </p>
+          </div>
+        </header>
+      )}
 
       <main className="ref-main">
+        <PageInfoGuide title="How this works">
+          <ul>
+            <li>Select an indexed Katalon project, then run <strong>Analyze framework</strong>.</li>
+            <li>
+              Gosi Brain scores duplication, Object Repository health, keywords, waits, assertions, and
+              architecture — with prioritized recommendations.
+            </li>
+            <li>
+              <strong>Read-only:</strong> nothing is changed in your project; apply fixes manually in Katalon
+              Studio.
+            </li>
+            <li>Use <strong>Force refresh</strong> after re-uploading or re-indexing the project.</li>
+          </ul>
+          <p className="page-info-hint">
+            Tip: use <strong>?</strong> Help → Gosi Brain Refactoring Assistant for the full step-by-step guide.
+          </p>
+        </PageInfoGuide>
+
         <div className="ref-toolbar">
           <label>
             Project

@@ -7,8 +7,10 @@ import {
   type WorkspaceChatResponse,
   type WorkspaceContextPayload,
 } from "../api";
+import { useLayoutContext } from "../components/layout/LayoutContext";
 import { MessageBubble, type ChatMessage } from "../components/chat/MessageBubble";
 import { PromptSuggestions } from "../components/chat/PromptSuggestions";
+import { Button } from "../components/ui/button";
 import "../components/chat/aiWorkspace.css";
 
 const SESSION_KEY = "katalon:ai_workspace_session";
@@ -25,6 +27,7 @@ function loadStoredContext(): WorkspaceContextPayload {
 }
 
 export default function AIWorkspace() {
+  const { embedded } = useLayoutContext();
   const [sessionId, setSessionId] = useState(
     () => localStorage.getItem(SESSION_KEY) ?? ""
   );
@@ -127,24 +130,20 @@ export default function AIWorkspace() {
   };
 
   return (
-    <div className="aiw-root">
-      <header className="aiw-header">
-        <div>
-          <h1>AI QA Workspace</h1>
-          <p>Chat with a QA architect — scripts, APIs, performance, project analysis, and healing</p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          <button type="button" className="aiw-btn" onClick={newChat}>
-            New chat
-          </button>
-          <a href="/" className="aiw-btn aiw-btn-primary aiw-link">
-            ← Generator
-          </a>
-          <a href="/how-to-use" className="aiw-btn aiw-link">
-            Documentation
-          </a>
-        </div>
-      </header>
+    <div className={embedded ? "aiw-root aiw-root--embedded" : "aiw-root"}>
+      <div className="aiw-toolbar-row">
+        {embedded ? null : (
+          <header className="aiw-header">
+            <div>
+              <h1>AI QA Workspace</h1>
+              <p>Chat with a QA architect — scripts, APIs, performance, project analysis, and healing</p>
+            </div>
+          </header>
+        )}
+        <Button variant="secondary" size="sm" onClick={newChat} className="aiw-new-chat-btn">
+          New chat
+        </Button>
+      </div>
 
       <div className="aiw-layout">
         <aside className="aiw-context-panel">

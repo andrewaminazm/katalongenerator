@@ -33,8 +33,13 @@ import {
   type StylePass,
 } from "./api";
 import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
-import { ActionWithTip, CheckboxTip, FieldBlock, LinkWithTip, TabWithTip, TipIcon, ToolbarBtn } from "./FieldTip";
+import { ActionWithTip, CheckboxTip, FieldBlock, TabWithTip, TipIcon, ToolbarBtn } from "./FieldTip";
+import { useGeneratorChrome } from "./components/layout/GeneratorChromeContext";
+import { useLayoutContext } from "./components/layout/LayoutContext";
+import { suiteForTab } from "./components/navigation/generatorSuites";
+import { useGeneratorTabUrl } from "./hooks/useGeneratorTabUrl";
 import { TIPS } from "./fieldTips";
+import { useThemeOptional } from "./theme/useThemeOptional";
 import {
   HelpMenu,
   OnboardingWizard,
@@ -126,9 +131,24 @@ function FieldClearBelow({
   );
 }
 
+const INPUT_TABS = new Set<InputTab>([
+  "manual",
+  "csv",
+  "jira",
+  "record",
+  "failure",
+  "api",
+  "performance",
+]);
+
 export default function App() {
+  const layout = useLayoutContext();
+  const { setChrome } = useGeneratorChrome();
+  const theme = useThemeOptional();
   const csvInputRef = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<InputTab>("manual");
+  const [tab, setTab] = useGeneratorTabUrl<InputTab>("manual", (t): t is InputTab =>
+    INPUT_TABS.has(t as InputTab)
+  );
   const [manualSteps, setManualSteps] = useState("");
   const [csvFileName, setCsvFileName] = useState<string | null>(null);
   const [csvSteps, setCsvSteps] = useState<string[]>([]);
@@ -191,11 +211,7 @@ export default function App() {
   >("learn_suggest");
   const [exportLoading, setExportLoading] = useState(false);
   const [exportResult, setExportResult] = useState<{ ok: boolean; message: string; path?: string } | null>(null);
-  const [dark, setDark] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-      : false
-  );
+  const dark = theme?.dark ?? false;
 
   // Mobile (Appium) session state
   const [appiumUrl, setAppiumUrl] = useState("http://127.0.0.1:4723");
@@ -219,10 +235,6 @@ export default function App() {
   const [mobileRecordProxyUrl, setMobileRecordProxyUrl] = useState<string | null>(null);
   const [mobileRecordedSteps, setMobileRecordedSteps] = useState<string[] | null>(null);
   const [mobileRecordedLocatorsText, setMobileRecordedLocatorsText] = useState<string | null>(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
-  }, [dark]);
 
   useEffect(() => {
     if (platform === "mobile" && tab === "record") {
@@ -798,62 +810,72 @@ export default function App() {
     setError(null);
   };
 
+  const activeSuite = suiteForTab(tab);
+  const showInputTabs = activeSuite === "input";
+
+  useEffect(() => {
+    if (!layout.embedded) return;
+    setChrome({
+      gosiBrainReady,
+      gosiConfigHint,
+      activeProjectLabel: activeProjectId ? `Project: ${activeProjectId}` : undefined,
+      onOpenWizard: openWizard,
+    });
+  }, [
+    layout.embedded,
+    setChrome,
+    gosiBrainReady,
+    gosiConfigHint,
+    activeProjectId,
+    openWizard,
+  ]);
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div>
-          <h1>Katalon script generator</h1>
-        </div>
-        <div className="header-meta">
-          {gosiBrainReady !== null && (
-            <span
-              className="badge"
-              style={{
-                background:
-                  gosiBrainReady === true
-                    ? "var(--ok-bg, #e8f5e9)"
-                    : gosiBrainReady === null
-                    ? "var(--error-bg, #ffebee)"
-                    : "var(--warn-bg, #fff8e1)",
-                color:
-                  gosiBrainReady === true
-                    ? "var(--ok, #2e7d32)"
-                    : gosiBrainReady === null
-                    ? "var(--error, #c62828)"
-                    : "var(--warn, #e65100)",
-              }}
-              title={gosiConfigHint ?? undefined}
+    <div className={layout.embedded ? "app-shell app-shell--embedded" : "app-shell"}>
+      {!layout.embedded && (
+        <header className="app-header">
+          <div>
+            <h1>Katalon script generator</h1>
+          </div>
+          <div className="header-meta">
+            {gosiBrainReady !== null && (
+              <span
+                className="badge"
+                style={{
+                  background:
+                    gosiBrainReady === true
+                      ? "var(--ok-bg, #e8f5e9)"
+                      : gosiBrainReady === null
+                        ? "var(--error-bg, #ffebee)"
+                        : "var(--warn-bg, #fff8e1)",
+                  color:
+                    gosiBrainReady === true
+                      ? "var(--ok, #2e7d32)"
+                      : gosiBrainReady === null
+                        ? "var(--error, #c62828)"
+                        : "var(--warn, #e65100)",
+                }}
+                title={gosiConfigHint ?? undefined}
+              >
+                {gosiBrainReady === true
+                  ? "Gosi Brain: ready"
+                  : gosiBrainReady === null
+                    ? "API unreachable"
+                    : gosiConfigHint ?? "Gosi Brain: not configured on API server"}
+              </span>
+            )}
+            <HelpMenu onOpenWizard={openWizard} />
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => theme?.toggleTheme()}
+              aria-label="Toggle dark mode"
             >
-              {gosiBrainReady === true
-                ? "Gosi Brain: ready"
-                : gosiBrainReady === null
-                ? "API unreachable"
-                : gosiConfigHint ?? "Gosi Brain: not configured on API server"}
-            </span>
-          )}
-          <LinkWithTip tip={TIPS.headerDocumentation} href="/how-to-use" className="theme-toggle header-docs-link">
-            Documentation
-          </LinkWithTip>
-          <LinkWithTip tip={TIPS.headerAiWorkspace} href="/ai-workspace" className="theme-toggle header-docs-link">
-            AI Workspace
-          </LinkWithTip>
-          <LinkWithTip tip={TIPS.headerCoverage} href="/coverage" className="theme-toggle header-docs-link">
-            Coverage
-          </LinkWithTip>
-          <LinkWithTip tip={TIPS.headerRefactor} href="/refactor" className="theme-toggle header-docs-link">
-            Refactor
-          </LinkWithTip>
-          <HelpMenu onOpenWizard={openWizard} />
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={() => setDark((d) => !d)}
-            aria-label="Toggle dark mode"
-          >
-            {dark ? "Light" : "Dark"}
-          </button>
-        </div>
-      </header>
+              {dark ? "Light" : "Dark"}
+            </button>
+          </div>
+        </header>
+      )}
 
       <OnboardingWizard open={wizardOpen} onClose={closeWizard} />
 
@@ -866,34 +888,27 @@ export default function App() {
       <AIPerformanceProvider activeProjectId={activeProjectId}>
       <div className="app-body">
         <section className="panel">
-          <div className="tabs" role="tablist">
-            <TabWithTip tip={TIPS.tabManual} active={tab === "manual"} onClick={() => setTab("manual")}>
-              Manual
-            </TabWithTip>
-            <TabWithTip tip={TIPS.tabCsv} active={tab === "csv"} onClick={() => setTab("csv")}>
-              CSV
-            </TabWithTip>
-            <TabWithTip tip={TIPS.tabJira} active={tab === "jira"} onClick={() => setTab("jira")}>
-              Jira
-            </TabWithTip>
-            <TabWithTip
-              tip={platform === "mobile" ? "Recording is available for Web only." : TIPS.tabRecord}
-              active={tab === "record"}
-              disabled={platform === "mobile"}
-              onClick={() => setTab("record")}
-            >
-              Record
-            </TabWithTip>
-            <TabWithTip tip={TIPS.tabFailure} active={tab === "failure"} onClick={() => setTab("failure")}>
-              AI Failure Analyzer
-            </TabWithTip>
-            <TabWithTip tip={TIPS.tabApiGenerator} active={tab === "api"} onClick={() => setTab("api")}>
-              API Test
-            </TabWithTip>
-            <TabWithTip tip={TIPS.tabPerformance} active={tab === "performance"} onClick={() => setTab("performance")}>
-              Performance Test
-            </TabWithTip>
-          </div>
+          {showInputTabs && (
+            <div className="tabs" role="tablist" aria-label="Test input sources">
+              <TabWithTip tip={TIPS.tabManual} active={tab === "manual"} onClick={() => setTab("manual")}>
+                Manual
+              </TabWithTip>
+              <TabWithTip tip={TIPS.tabCsv} active={tab === "csv"} onClick={() => setTab("csv")}>
+                CSV
+              </TabWithTip>
+              <TabWithTip tip={TIPS.tabJira} active={tab === "jira"} onClick={() => setTab("jira")}>
+                Jira
+              </TabWithTip>
+              <TabWithTip
+                tip={platform === "mobile" ? "Recording is available for Web only." : TIPS.tabRecord}
+                active={tab === "record"}
+                disabled={platform === "mobile"}
+                onClick={() => setTab("record")}
+              >
+                Record
+              </TabWithTip>
+            </div>
+          )}
 
           {tab === "manual" ? (
             <div className="stack">

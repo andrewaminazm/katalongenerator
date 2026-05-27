@@ -4,6 +4,35 @@
   flex-direction: column;
 }
 
+.app-shell--embedded {
+  min-height: 0;
+  height: 100%;
+}
+
+.app-shell--embedded .app-body {
+  min-height: 0;
+}
+
+.app-shell--embedded .tabs {
+  gap: 0.35rem;
+  padding: 0.35rem;
+  margin-bottom: 0.75rem;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border: 1px solid var(--border);
+}
+
+.app-shell--embedded .tabs .tab {
+  border-radius: 8px;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.app-shell--embedded .tabs .tab.active {
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+  color: var(--accent);
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -330,11 +359,9 @@ label.field-label {
   filter: brightness(1.08);
 }
 
-.field-tip-bubble {
-  position: absolute;
-  z-index: 200;
-  top: calc(100% + 6px);
-  left: 0;
+/* Bubbles render in a document.body portal (see FieldTip.tsx) — always beside the ℹ icon */
+.field-tip-bubble,
+.field-tip-bubble--portal {
   width: max-content;
   max-width: min(300px, 85vw);
   padding: 0.55rem 0.7rem;
@@ -349,16 +376,14 @@ label.field-label {
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.12s ease, visibility 0.12s ease;
 }
 
-/* Shown only via JS (--open) to avoid duplicate with native title or double positioning */
-.field-tip-trigger--open .field-tip-bubble {
-  opacity: 1;
-  visibility: visible;
+.field-tip-bubble--portal {
+  pointer-events: auto;
+}
+
+.field-tip-trigger--open .field-tip-icon {
+  filter: brightness(1.08);
 }
 
 .tab-with-tip-wrap,
@@ -379,12 +404,6 @@ label.field-label {
 
 .action-with-tip > .btn {
   white-space: nowrap;
-}
-
-.code-toolbar .field-tip-trigger .field-tip-bubble {
-  top: calc(100% + 6px);
-  left: auto;
-  right: 0;
 }
 
 .flow-guide {
@@ -444,6 +463,13 @@ label.field-label {
   border: 1px solid var(--border);
   background: var(--surface);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.onboarding-help-footer {
+  margin: 1rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-small);
 }
 
 .onboarding-wizard-header {
@@ -533,6 +559,21 @@ label.field-label {
   background: var(--accent);
   color: var(--surface);
   border-color: var(--accent);
+}
+
+.help-topic-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 55;
+  width: min(420px, calc(100vw - 1.5rem));
+  max-height: min(72vh, 520px);
+  overflow: auto;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
 .help-menu-dropdown {

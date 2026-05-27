@@ -124,7 +124,7 @@ type HelpMenuProps = {
   onOpenWizard: () => void;
 };
 
-function HelpTopicDialog({
+function HelpTopicPanel({
   topicId,
   onClose,
 }: {
@@ -132,30 +132,39 @@ function HelpTopicDialog({
   onClose: () => void;
 }) {
   const topic = HELP_TOPICS[topicId];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="onboarding-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="onboarding-help-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="help-dialog-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="onboarding-wizard-header">
-          <h2 id="help-dialog-title" className="onboarding-wizard-title" style={{ margin: 0 }}>
-            {topic.title}
-          </h2>
-          <button type="button" className="btn btn-ghost btn-small" onClick={onClose} aria-label="Close">
-            Close
-          </button>
-        </div>
-        <ol className="onboarding-help-list">
-          {topic.steps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-        {topic.hint && <p className="hint onboarding-help-hint">{topic.hint}</p>}
+    <div
+      className="help-topic-panel"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="help-dialog-title"
+    >
+      <div className="onboarding-wizard-header">
+        <h2 id="help-dialog-title" className="onboarding-wizard-title" style={{ margin: 0 }}>
+          {topic.title}
+        </h2>
+        <button type="button" className="btn btn-ghost btn-small" onClick={onClose} aria-label="Close">
+          Close
+        </button>
       </div>
+      <ol className="onboarding-help-list">
+        {topic.steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+      {topic.hint && <p className="hint onboarding-help-hint">{topic.hint}</p>}
+      <p className="hint onboarding-help-footer">
+        Short hints for one field: teal <strong>ℹ</strong> next to labels and tabs.
+      </p>
     </div>
   );
 }
@@ -166,13 +175,16 @@ export function HelpMenu({ onOpenWizard }: HelpMenuProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !helpTopic) return;
     const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setHelpTopic(null);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
+  }, [open, helpTopic]);
 
   return (
     <>
@@ -182,7 +194,8 @@ export function HelpMenu({ onOpenWizard }: HelpMenuProps) {
           className="help-menu-trigger"
           aria-expanded={open}
           aria-haspopup="menu"
-          title="Help"
+          title="Help topics — full step-by-step guides (not the small ℹ field hints)"
+          aria-label="Help topics"
           onClick={() => setOpen((v) => !v)}
         >
           ?
@@ -312,8 +325,8 @@ export function HelpMenu({ onOpenWizard }: HelpMenuProps) {
             </button>
           </div>
         )}
+        {helpTopic && <HelpTopicPanel topicId={helpTopic} onClose={() => setHelpTopic(null)} />}
       </div>
-      {helpTopic && <HelpTopicDialog topicId={helpTopic} onClose={() => setHelpTopic(null)} />}
     </>
   );
 }
