@@ -1,10 +1,9 @@
 import express from "express";
 import {
   generateExecutionReport,
-  reportToMarkdown,
   type ExecutionReportInput,
 } from "../services/executionReport/index.js";
-import { markdownToPdfBuffer } from "../services/markdownPdf/markdownToPdf.js";
+import { executionReportToPdfBuffer } from "../services/executionReport/executionReportPdf.js";
 
 export function createExecutionReportRouter(): express.Router {
   const router = express.Router();
@@ -23,8 +22,7 @@ export function createExecutionReportRouter(): express.Router {
     try {
       const body = req.body as ExecutionReportInput;
       const report = generateExecutionReport(body);
-      const markdown = reportToMarkdown(report);
-      const pdf = await markdownToPdfBuffer(markdown, report.pdfTitle);
+      const pdf = await executionReportToPdfBuffer(report);
       const safeName = `${body.projectName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${body.buildId}`;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${safeName}-execution-report.pdf"`);
