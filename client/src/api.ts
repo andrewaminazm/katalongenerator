@@ -42,7 +42,7 @@ export interface LocatorResult {
   boundingBox?: { x: number; y: number; width: number; height: number };
 }
 
-export type GenerateMode = "manual" | "record";
+export type GenerateMode = "manual";
 
 export interface RecorderLocator {
   name: string;
@@ -646,7 +646,7 @@ function formatGenerateErrorBody(raw: string): string | undefined {
     if (Array.isArray(parsed.validationErrors) && parsed.validationErrors.length > 0) {
       const hint =
         parsed.validationStage === "compile"
-          ? "\n(Add locator lines like `myButton = #id` for each step target, or generate from Record with locators merged.)"
+          ? "\n(Add locator lines like `myButton = #id` for each step target, or use Page URL preview/auto-detect to fill locators.)"
           : "";
       return `${parsed.error ?? "Validation failed"}\n${parsed.validationErrors.map((e) => `- ${e}`).join("\n")}${hint}`;
     }
@@ -730,14 +730,7 @@ export async function generateCodeStream(
   return full;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-/** Clears a stuck server recording (closed browser tab, refreshed UI, etc.). */
-export async function cancelRecordingOnServer(): Promise<void> {
-  await fetch(`${API_BASE}/api/record/cancel`, { method: "POST" });
-}
+// Record mode removed from the product UI (production servers are headless).
 
 export async function exportToKatalonProject(
   payload: ExportKatalonPayload
@@ -755,42 +748,7 @@ export async function exportToKatalonProject(
 /**
  * Starts a headful recording on the server, polls live URL into `onUrlChange`, then returns the script/steps/locators when the session ends (Finish button or timeout).
  */
-export async function recordTestFlow(
-  url: string,
-  onUrlChange?: (url: string) => void
-): Promise<RecordFlowResponse> {
-  const startOpts = {
-    method: "POST" as const,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  };
-  let start = await fetch(`${API_BASE}/api/record/start`, startOpts);
-  if (start.status === 409) {
-    await cancelRecordingOnServer();
-    start = await fetch(`${API_BASE}/api/record/start`, startOpts);
-  }
-  if (!start.ok) {
-    const err = await start.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || start.statusText);
-  }
-  for (;;) {
-    await sleep(400);
-    const stRes = await fetch(`${API_BASE}/api/record/status`);
-    if (!stRes.ok) {
-      const err = await stRes.json().catch(() => ({}));
-      throw new Error((err as { error?: string }).error || stRes.statusText);
-    }
-    const st = (await stRes.json()) as { active: boolean; url: string | null };
-    if (st.url) onUrlChange?.(st.url);
-    if (!st.active) break;
-  }
-  const res = await fetch(`${API_BASE}/api/record/result`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error || res.statusText);
-  }
-  return res.json() as Promise<RecordFlowResponse>;
-}
+// Record mode removed from the product UI (production servers are headless).
 
 export async function extractLocatorsFromUrl(
   url: string,

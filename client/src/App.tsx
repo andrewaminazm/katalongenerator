@@ -13,8 +13,6 @@ import {
   parseCsv,
   type ConvertLocatorResultItem,
   type CsvTestCaseRow,
-  cancelRecordingOnServer,
-  recordTestFlow,
   exportToKatalonProject,
   mobilePingAppium,
   mobileStartSession,
@@ -59,7 +57,7 @@ import { AIPerformanceTab } from "./components/AIPerformance/AIPerformanceTab";
 import { PerformanceOutputPanel } from "./components/AIPerformance/PerformanceOutputPanel";
 import "./App.css";
 
-type InputTab = "manual" | "csv" | "jira" | "record" | "failure" | "api" | "performance";
+type InputTab = "manual" | "csv" | "jira" | "failure" | "api" | "performance";
 
 /** Mobile WebView passes `?token=` once; we persist the Bearer value for /api/generate. */
 const GOSI_TOKEN_KEY = "katalon:gosi_token";
@@ -90,7 +88,7 @@ function splitSteps(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Append recorded `name = selector` lines to the shared locators box (used after Record). */
+/** Append `name = selector` lines to the shared locators box. */
 function mergeLocatorBlock(existing: string, added: string): string {
   const e = existing.trim();
   const a = added.trim();
@@ -135,7 +133,6 @@ const INPUT_TABS = new Set<InputTab>([
   "manual",
   "csv",
   "jira",
-  "record",
   "failure",
   "api",
   "performance",
@@ -165,11 +162,7 @@ export default function App() {
   const [jiraVerifyMsg, setJiraVerifyMsg] = useState<string | null>(null);
   const [jiraLoading, setJiraLoading] = useState(false);
 
-  const [recordUrl, setRecordUrl] = useState("");
-  const [recordPlaywrightScript, setRecordPlaywrightScript] = useState("");
-  const [recordLoading, setRecordLoading] = useState(false);
-  /** When true, server keeps full trace (no dedupe / no intent inserts / strict count). Default on. */
-  const [preserveRecordingFidelity, setPreserveRecordingFidelity] = useState(true);
+  // Recording mode removed from the product UI (production servers are headless).
 
   const [platform, setPlatform] = useState<Platform>("web");
   const llm: LlmProvider = "gosi-brain";
@@ -237,9 +230,7 @@ export default function App() {
   const [mobileRecordedLocatorsText, setMobileRecordedLocatorsText] = useState<string | null>(null);
 
   useEffect(() => {
-    if (platform === "mobile" && tab === "record") {
-      setTab("manual");
-    }
+    // No special tab routing needed (Record removed).
   }, [platform, tab]);
 
   const loadHistory = useCallback(async () => {
@@ -298,7 +289,6 @@ export default function App() {
       return csvSteps;
     }
     if (tab === "jira") return splitSteps(jiraStepsText);
-    if (tab === "record") return [];
     return [];
   }, [
     tab,
@@ -351,28 +341,6 @@ export default function App() {
     setCsvSelectedRowIndexes([]);
   };
 
-  const onRecordFlow = async () => {
-    setError(null);
-    if (!recordUrl.trim()) {
-      setError("Enter a URL to record.");
-      return;
-    }
-    if (platform !== "web") {
-      setError('Switch platform to "Web" to use recording.');
-      return;
-    }
-    setRecordLoading(true);
-    try {
-      const r = await recordTestFlow(recordUrl.trim(), (u) => setRecordUrl(u));
-      setRecordPlaywrightScript(r.playwrightScript);
-      const recLocatorLines = r.locators.map((l) => `${l.name} = ${l.selector}`).join("\n");
-      setLocators((prev) => mergeLocatorBlock(prev, recLocatorLines));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Recording failed");
-    } finally {
-      setRecordLoading(false);
-    }
-  };
 
   const onJiraTestLogin = async () => {
     setError(null);
@@ -434,25 +402,11 @@ export default function App() {
 
   const onGenerate = async () => {
     setError(null);
-    if (tab === "record") {
-      if (platform !== "web") {
-        setError('Recording-based generation requires platform "Web".');
-        return;
-      }
-      if (!recordPlaywrightScript.trim() && !recordUrl.trim()) {
-        setError(
-          "Paste a Playwright script above, record a flow, or enter a URL so the server can capture on Generate."
-        );
-        return;
-      }
-    }
-    const recordHasScriptOrUrl =
-      tab === "record" && platform === "web" && (recordPlaywrightScript.trim().length > 0 || recordUrl.trim().length > 0);
-    if (effectiveSteps.length === 0 && !recordHasScriptOrUrl) {
+    if (effectiveSteps.length === 0) {
       setError("Add at least one test step.");
       return;
     }
-    if (tab !== "record" && autoDetectLocators && !locatorUrl.trim()) {
+    if (autoDetectLocators && !locatorUrl.trim()) {
       setError("Enter a page URL or turn off auto-detect locators.");
       return;
     }
@@ -473,7 +427,7 @@ export default function App() {
         const mergeLines = mergeLocatorLinesForConvert(locators, autoPreview);
         if (mergeLines.length > 0) {
           try {
-            const convUrl = locatorUrl.trim() || recordUrl.trim() || undefined;
+            const convUrl = locatorUrl.trim() || undefined;
             const data = await convertLocatorsApi({ locators: mergeLines, url: convUrl });
             locatorsForGenerate = data.lines;
             setLocators(data.lines);
@@ -487,11 +441,7 @@ export default function App() {
       }
 
       let urlForGenerate: string | undefined;
-      if (tab === "record" && platform === "web") {
-        if (!recordPlaywrightScript.trim() && recordUrl.trim()) {
-          urlForGenerate = recordUrl.trim();
-        }
-      } else if (autoDetectLocators && locatorUrl.trim()) {
+      if (autoDetectLocators && locatorUrl.trim()) {
         urlForGenerate = locatorUrl.trim();
       }
 
@@ -504,19 +454,11 @@ export default function App() {
         llm,
         model,
         testCaseName: testCaseName.trim() || undefined,
-        autoDetectLocators:
-          tab !== "record" && autoDetectLocators && Boolean(locatorUrl.trim()),
+        autoDetectLocators: autoDetectLocators && Boolean(locatorUrl.trim()),
         url: urlForGenerate,
         pageLocale,
         stylePass,
         ...(tokenForGosi ? { authorization_token: tokenForGosi } : {}),
-        ...(tab === "record" && platform === "web"
-          ? {
-              mode: "record" as const,
-              recordedPlaywrightScript: recordPlaywrightScript.trim() || undefined,
-              preserveRecordingFidelity,
-            }
-          : {}),
         ...(activeProjectId
           ? { projectId: activeProjectId, projectGenerationMode, aiMemoryMode }
           : {}),
@@ -747,7 +689,7 @@ export default function App() {
     }
     setConvertLoading(true);
     try {
-      const url = locatorUrl.trim() || recordUrl.trim() || undefined;
+      const url = locatorUrl.trim() || undefined;
       const data = await convertLocatorsApi({ locators: lines, url });
       setLocators(data.lines);
       setConvertReport(data.results);
@@ -898,14 +840,6 @@ export default function App() {
               </TabWithTip>
               <TabWithTip tip={TIPS.tabJira} active={tab === "jira"} onClick={() => setTab("jira")}>
                 Jira
-              </TabWithTip>
-              <TabWithTip
-                tip={platform === "mobile" ? "Recording is available for Web only." : TIPS.tabRecord}
-                active={tab === "record"}
-                disabled={platform === "mobile"}
-                onClick={() => setTab("record")}
-              >
-                Record
               </TabWithTip>
             </div>
           )}
@@ -1109,77 +1043,6 @@ export default function App() {
                 <FieldClearBelow
                   onClear={() => setJiraStepsText("")}
                   disabled={!jiraStepsText.trim()}
-                />
-              </FieldBlock>
-            </div>
-          ) : tab === "record" ? (
-            <div className="stack">
-              <p className="hint">
-                Opens a real Chromium window on the <strong>machine running the backend</strong>. Use{" "}
-                <strong>Finish recording</strong> in the page when done (or wait for the session timeout).
-              </p>
-              <FieldBlock tip={TIPS.recordUrl} label="URL to open" htmlFor="recordUrl">
-                <input
-                  id="recordUrl"
-                  className="input"
-                  type="url"
-                  value={recordUrl}
-                  onChange={(e) => setRecordUrl(e.target.value)}
-                  placeholder="https://..."
-                />
-                <FieldClearBelow onClear={() => setRecordUrl("")} disabled={!recordUrl.trim()} />
-              </FieldBlock>
-              <CheckboxTip
-                id="preserveFidelity"
-                tip={TIPS.preserveFidelity}
-                checked={preserveRecordingFidelity}
-                onChange={setPreserveRecordingFidelity}
-                label="Lossless replay (preserve full trace; no inserted steps; skip Groovy optimizers)"
-              />
-              <div className="row-actions">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={onRecordFlow}
-                  disabled={recordLoading || platform === "mobile"}
-                >
-                  {recordLoading ? "Recording session…" : "Record test flow"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost record-cancel"
-                  onClick={async () => {
-                    setError(null);
-                    try {
-                      await cancelRecordingOnServer();
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Could not cancel recording");
-                    }
-                  }}
-                  disabled={platform === "mobile"}
-                  title="Clears a stuck session if you closed the browser or refreshed the page"
-                >
-                  Cancel recording on server
-                </button>
-              </div>
-              <FieldBlock
-                tip={TIPS.recordScript}
-                label="Playwright-style script (editable)"
-                htmlFor="pwScript"
-              >
-                <textarea
-                  id="pwScript"
-                  className="input record-flow-textarea"
-                  rows={6}
-                  value={recordPlaywrightScript}
-                  onChange={(e) => setRecordPlaywrightScript(e.target.value)}
-                  spellCheck={false}
-                  placeholder="Paste a script or populate by recording…"
-                  dir="ltr"
-                />
-                <FieldClearBelow
-                  onClear={() => setRecordPlaywrightScript("")}
-                  disabled={!recordPlaywrightScript.trim()}
                 />
               </FieldBlock>
             </div>
@@ -1597,24 +1460,6 @@ export default function App() {
             {error && (
               <div className="error-block">
                 <p className="status-msg error">{error}</p>
-                {/already in progress/i.test(error) && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-small"
-                    onClick={async () => {
-                      try {
-                        await cancelRecordingOnServer();
-                        setError(null);
-                      } catch (err) {
-                        setError(
-                          err instanceof Error ? err.message : "Could not clear recording session"
-                        );
-                      }
-                    }}
-                  >
-                    Clear stuck recording session
-                  </button>
-                )}
               </div>
             )}
 

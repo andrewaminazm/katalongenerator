@@ -697,16 +697,6 @@ textarea.locator-preview-textarea {
   min-height: 28rem;
 }
 
-/*
- * Record tab: Arabic (RTL) + English selectors (#id, CSS) in one line.
- * Plaintext bidi keeps neutral punctuation from jumping into the wrong run.
- */
-textarea.input.record-flow-textarea {
-  direction: ltr;
-  unicode-bidi: plaintext;
-  text-align: left;
-}
-
 .jira-steps-panel {
   margin-top: 0.75rem;
   padding: 1rem;
@@ -814,10 +804,6 @@ label.btn {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
-}
-
-.record-cancel {
-  font-size: 0.85rem;
 }
 
 .error-block {

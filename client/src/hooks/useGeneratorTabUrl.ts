@@ -4,7 +4,6 @@ const VALID_TABS = new Set([
   "manual",
   "csv",
   "jira",
-  "record",
   "failure",
   "api",
   "performance",

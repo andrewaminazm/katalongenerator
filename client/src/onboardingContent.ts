@@ -45,7 +45,7 @@ export const WIZARD_SLIDES: WizardSlide[] = [
     id: "basics",
     title: "Generate Katalon Groovy",
     body: [
-      "Write test steps in plain language (one action per line) on Manual, CSV, Jira, or Record.",
+      "Write test steps in plain language (one action per line) on Manual, CSV, or Jira.",
       "Set Code output (Auto or test script / custom keyword / page object / utility).",
       "Add locators or use Page URL auto-detect; with an Active project, OR names resolve from your repo.",
       "Click Generate Katalon Groovy — copy, download, or Add to Katalon Project.",
@@ -123,7 +123,7 @@ export const WIZARD_SLIDES: WizardSlide[] = [
     body: [
       "Use the ? menu and i icons next to fields for detailed help on every tab.",
       "Try example templates under Manual to fill sample steps in one click.",
-      "Record (Web) fills locators; Mobile uses the Appium panel when Platform is Mobile.",
+      "Use Page URL preview/auto-detect to fill locators; Mobile uses the Appium panel when Platform is Mobile.",
       "Enable Gosi Brain memory (team style) so Generate, Failure Analyzer, and API Test match your project conventions.",
       "Use Gosi Brain Workspace for multi-step QA questions without switching tabs.",
     ],

@@ -6,8 +6,6 @@ export const TIPS = {
     "Upload a CSV of steps or test-case exports. Select rows, then generate Groovy like the Manual tab.",
   tabJira:
     "Pull steps from a Jira issue (or demo data). Edit the steps box, then generate on the right.",
-  tabRecord:
-    "Record a web flow in a browser on the server machine. Playwright script and locators fill automatically.",
   tabFailure:
     "Paste Katalon execution logs only — infers root cause, flakiness, and fixes without stacktrace or screenshot.",
   tabApiGenerator:
@@ -49,12 +47,6 @@ export const TIPS = {
     "Issue key (PROJ-123) or full browse URL. Fetch loads description/steps into the editable box below.",
   jiraSteps:
     "These lines are sent to Generate. Edit after fetch if needed.",
-  recordUrl:
-    "Page to open in the headed browser on the server. Must be reachable from where the backend runs.",
-  recordScript:
-    "Playwright code from recording. Generate uses this instead of re-recording when URL is empty.",
-  preserveFidelity:
-    "Keeps every recorded action in order with no deduplication — closest to what you recorded.",
 
   platform:
     "Web uses WebUI keywords. Mobile uses Appium/Mobile keywords and the Appium panel below.",
@@ -113,9 +105,9 @@ export const TIPS = {
 
 export const FLOW_STEPS = [
   "Optional: upload a Katalon project (.zip/.rar) and set it as Active project.",
-  "Enter test steps on Manual, CSV, Jira, or Record (Web only).",
+  "Enter test steps on Manual, CSV, or Jira.",
   "Choose Code output (Auto, test script, custom keyword, page object, utility, etc.).",
-  "Add locators manually, from Page URL preview/auto-detect, or from recording.",
+  "Add locators manually or from Page URL preview/auto-detect.",
   "Click Generate Katalon Groovy — script appears on the right.",
   "Copy, download .groovy, or Add to Katalon Project (local folder path).",
   "For failed runs: open Gosi Brain Failure Analyzer tab and paste Katalon execution logs only.",
@@ -199,7 +191,7 @@ export const PERFORMANCE_TEST_HINT =
 
 /** Gosi Brain Failure Analyzer — log-only debugging. */
 export const FAILURE_ANALYZER_STEPS = [
-  "Open the Gosi Brain Failure Analyzer tab (next to Record).",
+  "Open the Gosi Brain Failure Analyzer tab.",
   "Paste Katalon Studio execution logs in the primary box — .log output, console text, or report excerpt.",
   "You do not need a stacktrace, screenshot, or HAR. Optional fields add extra confidence only.",
   "Click Analyze failure. Review root cause, flaky probability, detected patterns, and suggested fixes.",

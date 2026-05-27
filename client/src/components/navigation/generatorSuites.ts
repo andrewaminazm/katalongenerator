@@ -2,14 +2,13 @@ export type GeneratorTabId =
   | "manual"
   | "csv"
   | "jira"
-  | "record"
   | "failure"
   | "api"
   | "performance";
 
 export type GeneratorSuite = "input" | "api" | "performance" | "failure";
 
-export const INPUT_SUITE_TABS: GeneratorTabId[] = ["manual", "csv", "jira", "record"];
+export const INPUT_SUITE_TABS: GeneratorTabId[] = ["manual", "csv", "jira"];
 
 export function suiteForTab(tab: string): GeneratorSuite {
   if (tab === "api") return "api";

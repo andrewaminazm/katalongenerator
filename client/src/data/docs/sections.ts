@@ -9,7 +9,7 @@ export const DOC_SECTIONS: DocSection[] = [
     keywords: ["welcome", "overview", "onboarding", "first test"],
     content: `Katalon Script Generator turns plain-language test steps into production-ready Katalon Groovy. You can work without a project (generic WebUI/Mobile keywords) or upload a Katalon Studio archive so generation reuses your Object Repository and Custom Keywords.
 
-The main workspace has input tabs on the left (Manual, CSV, Jira, Record, Gosi Brain Failure Analyzer, API Test, Performance Test) and generated output on the right. Project Intelligence lives in the lower panel for upload, indexing, and Project Analyze.
+The main workspace has input tabs on the left (Manual, CSV, Jira, Gosi Brain Failure Analyzer, API Test, Performance Test) and generated output on the right. Project Intelligence lives in the lower panel for upload, indexing, and Project Analyze.
 
 Open **Gosi Brain Workspace** from the header (/ai-workspace) for a conversational QA layer — generate scripts, analyze projects, and plan API/performance work in natural language.
 
@@ -314,33 +314,7 @@ Self-healing in Project Intelligence ranks alternative locators for OR rows, opt
     ],
     mediaPlaceholders: ["Locator preview panel", "OR heal ranking list"],
   },
-  {
-    id: "playwright-recording",
-    title: "Playwright Recording Mode",
-    category: "generation",
-    summary: "Record a web flow on the server and fill script + locators.",
-    keywords: ["record", "playwright", "replay", "recording"],
-    content: `The Record tab launches a headed Chromium session on the machine running the backend. Actions are captured into a Playwright script and locator lines you can edit before Generate.
-
-Preserve fidelity keeps every recorded action in order. Web platform only — use Mobile/Appium paths for native apps.`,
-    steps: [
-      "Set Platform to Web.",
-      "Open Record tab; enter start URL reachable from the server.",
-      "Start recording, perform actions in the opened browser, stop recording.",
-      "Review Playwright script and locators; edit if needed.",
-      "Generate Katalon Groovy — uses script when URL is empty, or re-record when URL is set.",
-    ],
-    tips: [
-      "Run playwright:install on the server once if recording fails to launch browser.",
-    ],
-    warnings: [
-      "Recording runs server-side — localhost URLs on your laptop are not visible to a remote server.",
-    ],
-    mistakes: [
-      "Expecting mobile recording from the Record tab.",
-    ],
-    mediaPlaceholders: ["Record tab controls", "Filled Playwright script area"],
-  },
+  // Recording mode removed from the product UI (production servers are headless).
   {
     id: "csv-import",
     title: "CSV Import",
