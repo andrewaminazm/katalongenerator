@@ -124,6 +124,121 @@ export interface StyleMatchReport {
 
 export type ProjectGenerationMode = "strict_reuse" | "balanced" | "generate_everything";
 
+export type FrameworkKind = "ui" | "api" | "mobile" | "performance" | "hybrid";
+export type ArchitecturePattern =
+  | "page-object"
+  | "hybrid"
+  | "keyword-driven"
+  | "data-driven"
+  | "bdd"
+  | "layered"
+  | "microservice-api";
+export type ProjectSize = "starter" | "standard" | "enterprise";
+export type DomainHint = "ecommerce" | "banking" | "healthcare" | "saas" | "government" | "generic";
+
+export interface ProjectGeneratorTemplate {
+  id: string;
+  name: string;
+  description: string;
+  frameworkKind: FrameworkKind;
+  architecturePattern: ArchitecturePattern;
+  defaultModules: string[];
+}
+
+export interface ProjectGeneratorAnalyzeResult {
+  generationId: string;
+  projectName: string;
+  inferredModules: string[];
+  inferredFlows: string[];
+  architectureSummary: string;
+  recommendedPattern: ArchitecturePattern;
+  estimatedFileCount: number;
+  warnings: string[];
+}
+
+export interface ProjectGeneratorGenerateResult {
+  projectId: string;
+  generationId: string;
+  projectName: string;
+  frameworkType: FrameworkKind;
+  architecturePattern: ArchitecturePattern;
+  generatedAt: string;
+  fromCache: boolean;
+  fileCount: number;
+  structurePreview: string[];
+  generatedModules: { id: string; name: string; layer: string; fileCount: number }[];
+  pages: { name: string; path: string; actions: string[]; validations: string[] }[];
+  keywords: { name: string; path: string; category: string }[];
+  apis: { name: string; path: string; category: string }[];
+  suites: { name: string; path: string; suiteType: string; testCasePaths: string[] }[];
+  documentation: { path: string; title: string }[];
+  healthScore: number;
+  frameworkHealth: {
+    overallScore: number;
+    orQuality: number;
+    assertionQuality: number;
+    modularityScore: number;
+    duplicationRisk: number;
+    flakyRisk: number;
+    maintainabilityScore: number;
+    findings: string[];
+  };
+  dependencyGraph: {
+    nodes: { id: string; label: string; layer: string }[];
+    edges: { from: string; to: string; kind: string }[];
+  };
+  warnings: string[];
+  downloadableZip: string;
+}
+
+export async function listProjectGeneratorTemplates(): Promise<ProjectGeneratorTemplate[]> {
+  const res = await fetch(`${API_BASE}/api/project-generator/templates`);
+  const data = (await res.json().catch(() => ({}))) as { templates?: ProjectGeneratorTemplate[]; error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data.templates ?? [];
+}
+
+export async function analyzeProjectGenerator(input: {
+  projectName: string;
+  description: string;
+  frameworkKind: FrameworkKind;
+  architecturePattern: ArchitecturePattern;
+  domain: DomainHint;
+  projectSize: ProjectSize;
+  reuseMode: ProjectGenerationMode;
+  sourceProjectId?: string;
+  modules: string[];
+  businessFlows: string[];
+  includeReporting: boolean;
+  includeBdd: boolean;
+  includePerformance: boolean;
+  includeMobile: boolean;
+  swaggerText?: string;
+  postmanText?: string;
+  jiraEpic?: string;
+  inputSources?: string[];
+}): Promise<ProjectGeneratorAnalyzeResult> {
+  const res = await fetch(`${API_BASE}/api/project-generator/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as ProjectGeneratorAnalyzeResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function generateProjectGenerator(input: Parameters<typeof analyzeProjectGenerator>[0] & { forceRefresh?: boolean }): Promise<ProjectGeneratorGenerateResult> {
+  const res = await fetch(`${API_BASE}/api/project-generator/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json().catch(() => ({}))) as ProjectGeneratorGenerateResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
 export interface ProjectMeta {
   projectId: string;
   projectName: string;

@@ -12,6 +12,7 @@ import { createPerformanceRouter } from "./routes/performanceRoutes.js";
 import { createAiWorkspaceRouter } from "./routes/aiWorkspaceRoutes.js";
 import { createCoverageRouter } from "./routes/coverageRoutes.js";
 import { createRefactorRouter } from "./routes/refactorRoutes.js";
+import { createProjectGeneratorRouter } from "./routes/projectGeneratorRoutes.js";
 import { logJiraTlsStartupHint } from "./services/jira.js";
 
 logJiraTlsStartupHint();
@@ -48,6 +49,7 @@ app.use("/api/performance", createPerformanceRouter());
 app.use("/api/ai-workspace", createAiWorkspaceRouter());
 app.use("/api/coverage", createCoverageRouter());
 app.use("/api/refactor", createRefactorRouter());
+app.use("/api/project-generator", createProjectGeneratorRouter());
 
 app.use(
   (

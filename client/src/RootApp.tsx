@@ -10,6 +10,7 @@ const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AIWorkspace = lazy(() => import("./pages/AIWorkspace"));
 const CoverageAnalyzer = lazy(() => import("./pages/CoverageAnalyzer"));
 const RefactoringAssistant = lazy(() => import("./pages/RefactoringAssistant"));
+const ProjectGenerator = lazy(() => import("./pages/ProjectGenerator"));
 
 function PageFallback({ label }: { label: string }) {
   return (
@@ -81,6 +82,22 @@ function RoutedContent({ pathname }: { pathname: string }) {
       >
         <Suspense fallback={<PageFallback label="Refactoring Assistant" />}>
           <RefactoringAssistant />
+        </Suspense>
+      </PlatformShell>
+    );
+  }
+
+  if (pathname === "/project-generator" || pathname.startsWith("/project-generator/")) {
+    return (
+      <PlatformShell
+        pathname={pathname}
+        navbar={{
+          title: "AI Project Generator",
+          subtitle: "Enterprise Katalon project scaffolding",
+        }}
+      >
+        <Suspense fallback={<PageFallback label="AI Project Generator" />}>
+          <ProjectGenerator />
         </Suspense>
       </PlatformShell>
     );

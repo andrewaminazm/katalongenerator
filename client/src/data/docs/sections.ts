@@ -206,6 +206,51 @@ It reuses Project Intelligence graph and script analysis. Results are cached unt
     mediaPlaceholders: ["Refactoring dashboard with score cards and recommendation panel"],
   },
   {
+    id: "ai-project-generator",
+    title: "AI Katalon Project Generator",
+    category: "intelligence",
+    summary:
+      "Generate complete enterprise Katalon projects: structure, OR, pages, keywords, suites, docs, dependency graph, and framework health.",
+    keywords: [
+      "project generator",
+      "framework generator",
+      "katalon project",
+      "scaffold",
+      "page object model",
+      "keyword driven",
+      "enterprise framework",
+      "object repository",
+      "test suites",
+      "health score",
+    ],
+    content: `AI Katalon Project Generator (/project-generator) produces a full enterprise-ready Katalon project package — not just scripts. It scaffolds a maintainable automation architecture (folders + modules), generates starter Object Repository structure with healing metadata, Page Objects, reusable Custom Keywords, suites, documentation, and an initial dependency graph + framework health indicators.
+
+The generator is **additive and safe**: it does not overwrite your uploaded projects. If you select a Source project, it can reuse naming conventions and style hints from Project Intelligence and AI Memory (strict reuse / balanced / generate everything).`,
+    steps: [
+      "Open AI Project Generator from the Gosi Brain sidebar.",
+      "Set Project name, Framework type (UI/API/Mobile/Performance/Hybrid), Pattern, Domain, and Project size.",
+      "Optional: select a Source project + reuse mode to align with your existing OR/keywords/style.",
+      "Add Modules and Business flows (one per line) for a more accurate architecture plan.",
+      "Click Analyze to preview inferred modules/flows and estimated file count.",
+      "Click Generate project to produce the full structure, health score, and a downloadable zip.",
+      "Import the zip into Katalon Studio and evolve the skeleton into your team’s final framework.",
+    ],
+    tips: [
+      "Start with Hybrid + Layered for enterprise teams, then refine modules and flow services as you learn the AUT.",
+      "Use Strict reuse when you must match an existing repository’s OR paths and keyword names.",
+      "Review Health findings and fix duplicated patterns early to avoid framework drift.",
+    ],
+    warnings: [
+      "The generated project is a scaffold — connect real locators, APIs, credentials, and environment profiles before CI.",
+      "Generation is export-only — it does not execute tests or call live endpoints.",
+    ],
+    mistakes: [
+      "Leaving Project name empty — required for generation.",
+      "Choosing Strict reuse without a well-indexed source project (OR/keywords) — may limit what can be reused.",
+    ],
+    mediaPlaceholders: ["AI Project Generator page with architecture preview + structure/health panels"],
+  },
+  {
     id: "ai-qa-workspace",
     title: "AI QA Workspace",
     category: "intelligence",
