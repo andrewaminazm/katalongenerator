@@ -193,7 +193,9 @@ async function runRecordingSession(
     resolveFinish?.();
   };
 
-  const browser = await (await getChromium()).launch({ headless: false });
+  // Recording must run headless on production servers (no DISPLAY / no X11).
+  // Local dev can still override via PLAYWRIGHT_HEADLESS / DISPLAY env vars.
+  const browser = await (await getChromium()).launch(getPlaywrightLaunchOptions());
   recordingBrowser = browser;
   let context: BrowserContext | null = null;
   try {
