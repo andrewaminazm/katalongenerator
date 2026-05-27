@@ -40,6 +40,33 @@ app.use(
 );
 app.use(express.json({ limit: "8mb" }));
 
+// Render/health convenience: this service is primarily an API backend.
+// The frontend is hosted separately (e.g. Netlify). Without this route, opening the Render
+// URL directly shows "Cannot GET /".
+app.get("/", (_req, res) => {
+  res
+    .status(200)
+    .type("html")
+    .send(
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />",
+        "<title>Katalon Script Generator API</title></head>",
+        "<body style=\"font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px;\">",
+        "<h2 style=\"margin: 0 0 8px;\">Katalon Script Generator — API backend</h2>",
+        "<p style=\"margin: 0 0 16px; color: #555;\">This Render service hosts the backend API. The web UI is hosted separately.</p>",
+        "<ul>",
+        "<li><code>/api/health</code> (API health)</li>",
+        "<li><code>/api/project-generator/templates</code></li>",
+        "<li><code>/api/project-generator/analyze</code> (POST)</li>",
+        "<li><code>/api/project-generator/generate</code> (POST)</li>",
+        "</ul>",
+        "</body></html>",
+      ].join("")
+    );
+});
+
 app.use("/api", createApiRouter());
 app.use("/api/projects", createProjectIntelligenceRouter());
 app.use("/api/failure", createFailureRouter());
