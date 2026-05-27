@@ -27,6 +27,7 @@ import {
   type PlaywrightLocaleMode,
   resolvePlaywrightLocale,
 } from "./playwrightLocale.js";
+import { getPlaywrightLaunchOptions } from "./playwrightLaunch.js";
 
 const __dir = (() => { try { return dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 
@@ -270,7 +271,7 @@ export async function extractPlaywrightLocatorLines(
   const mode = opts?.locale ?? "auto";
   const { locale, acceptLanguage, gotoUrl } = resolvePlaywrightLocale(url, mode);
 
-  const browser = await (await getChromium()).launch({ headless: true });
+  const browser = await (await getChromium()).launch(getPlaywrightLaunchOptions());
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 },
     locale,

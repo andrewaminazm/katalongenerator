@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { getPlaywrightLaunchOptions } from "../playwrightLaunch.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -178,7 +179,7 @@ export async function markdownToPdfBuffer(
   documentTitle: string
 ): Promise<Buffer> {
   const html = wrapHtml(mdToHtml(markdown), documentTitle);
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(getPlaywrightLaunchOptions());
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "load" });

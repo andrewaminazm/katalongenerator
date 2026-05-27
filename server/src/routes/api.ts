@@ -18,6 +18,7 @@ import {
   startRecordingJob,
   takeRecordingResult,
 } from "../services/playwrightRecorder.js";
+import { shouldLaunchPlaywrightHeadless } from "../services/playwrightLaunch.js";
 import { runPlaywrightRecordingPipeline } from "../services/recordingIntelligence/universalRecordingPipeline.js";
 import { gosiBrainGenerate, GosiBrainAuthError, streamGosiBrain } from "../services/gosiBrain.js";
 import {
@@ -1611,7 +1612,17 @@ export function createApiRouter(): express.Router {
         return;
       }
       startRecordingJob(url.trim());
-      res.json({ ok: true });
+      const headless = shouldLaunchPlaywrightHeadless();
+      res.json({
+        ok: true,
+        headless,
+        ...(headless
+          ? {
+              note:
+                "Recording runs headless on this server (no display). Interactions are captured in the server browser — for a visible window, run the API on your local machine.",
+            }
+          : {}),
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes("already in progress")) {

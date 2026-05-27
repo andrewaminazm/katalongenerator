@@ -19,6 +19,7 @@ async function getChromium(): Promise<BrowserType<Browser>> {
   }
 }
 import { parsePlaywrightScriptToDsl } from "./playwrightActionParser.js";
+import { getPlaywrightLaunchOptions, shouldLaunchPlaywrightHeadless } from "./playwrightLaunch.js";
 
 const __recDir = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 
@@ -67,7 +68,7 @@ let sessionRunning = false;
 let recordingJob: Promise<void> | null = null;
 let lastRecordingResult: RecorderResult | null = null;
 let lastRecordingError: Error | null = null;
-/** Headed browser for the active session — used by cancel to unblock stuck "in progress" state. */
+/** Active recording browser — used by cancel to unblock stuck "in progress" state. */
 let recordingBrowser: Browser | null = null;
 
 const DEFAULT_MAX_MS = 180_000;
@@ -368,7 +369,7 @@ export function isRecordingSessionActive(): boolean {
   return sessionRunning;
 }
 
-/** Closes the headed browser (if any), waits for the session promise, and clears server-side recording state. */
+/** Closes the recording browser (if any), waits for the session promise, and clears server-side recording state. */
 export async function cancelRecordingSession(): Promise<void> {
   const b = recordingBrowser;
   recordingBrowser = null;

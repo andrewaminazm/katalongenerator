@@ -23,6 +23,7 @@ import {
   type PlaywrightLocaleMode,
   resolvePlaywrightLocale,
 } from "./playwrightLocale.js";
+import { getPlaywrightLaunchOptions } from "./playwrightLaunch.js";
 
 const __pwDir = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return process.cwd(); } })();
 
@@ -64,7 +65,7 @@ let browserSingleton: Promise<Browser> | null = null;
 /** @internal Exported for self-healing / advanced Playwright flows. */
 export async function getSharedBrowser(): Promise<Browser> {
   if (!browserSingleton) {
-    browserSingleton = getChromium().then((c) => c.launch({ headless: true }));
+    browserSingleton = getChromium().then((c) => c.launch(getPlaywrightLaunchOptions()));
   }
   try {
     return await browserSingleton;
