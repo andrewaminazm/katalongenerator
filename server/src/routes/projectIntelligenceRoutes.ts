@@ -160,6 +160,92 @@ export function createProjectIntelligenceRouter(): express.Router {
     }
   });
 
+  router.post("/:projectId/v2/analyze", async (req, res) => {
+    try {
+      const { analyzeProjectV2 } = await import("../services/projectIntelligenceV2/index.js");
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const result = await analyzeProjectV2(req.params.projectId, {
+        healScripts: body.healScripts !== false,
+        healLocators: body.healLocators !== false,
+        generateDocumentation: body.generateDocumentation !== false,
+        maxScripts: typeof body.maxScripts === "number" ? body.maxScripts : undefined,
+      });
+      res.json(result);
+    } catch (e) {
+      res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  router.post("/:projectId/v2/fix-script", async (req, res) => {
+    try {
+      const scriptPath = String((req.body as { scriptPath?: string }).scriptPath ?? "").trim();
+      if (!scriptPath) {
+        res.status(400).json({ error: "scriptPath is required" });
+        return;
+      }
+      const { fixProjectScript } = await import("../services/projectIntelligenceV2/index.js");
+      const result = await fixProjectScript(req.params.projectId, scriptPath);
+      res.json(result);
+    } catch (e) {
+      res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  router.post("/:projectId/v2/documentation/pdf", async (req, res) => {
+    try {
+      const body = (req.body ?? {}) as { markdown?: string; title?: string; projectName?: string };
+      const markdown = String(body.markdown ?? "").trim();
+      if (!markdown) {
+        res.status(400).json({ error: "markdown is required" });
+        return;
+      }
+      const title =
+        String(body.title ?? body.projectName ?? "Project documentation").trim() ||
+        "Project documentation";
+      const { markdownToPdfBuffer } = await import("../services/markdownPdf/markdownToPdf.js");
+      const pdf = await markdownToPdfBuffer(markdown, title);
+      const safeName = title.replace(/[^\w.-]+/g, "_").slice(0, 80) || "project-docs";
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeName}.pdf"`);
+      res.send(pdf);
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  router.post("/:projectId/v2/heal-locator", async (req, res) => {
+    try {
+      const orPath = String((req.body as { orPath?: string }).orPath ?? "").trim();
+      if (!orPath) {
+        res.status(400).json({ error: "orPath is required" });
+        return;
+      }
+      const pageUrl =
+        typeof (req.body as { pageUrl?: string }).pageUrl === "string"
+          ? (req.body as { pageUrl?: string }).pageUrl
+          : undefined;
+      const { healProjectLocator } = await import("../services/projectIntelligenceV2/index.js");
+      const result = await healProjectLocator(req.params.projectId, orPath, pageUrl);
+      res.json(result);
+    } catch (e) {
+      res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
+  router.get("/:projectId/v2/graph", async (req, res) => {
+    try {
+      const index = await loadProjectIndex(req.params.projectId);
+      if (!index) {
+        res.status(404).json({ error: "Project not found" });
+        return;
+      }
+      const { buildProjectGraphV2 } = await import("../services/projectIntelligenceV2/index.js");
+      res.json({ projectGraph: buildProjectGraphV2(index) });
+    } catch (e) {
+      res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+    }
+  });
+
   router.get("/:projectId/search", async (req, res) => {
     const index = await loadProjectIndex(req.params.projectId);
     if (!index) {

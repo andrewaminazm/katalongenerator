@@ -6,6 +6,12 @@ import express from "express";
 import { createApiRouter } from "./routes/api.js";
 import { createProjectIntelligenceRouter } from "./routes/projectIntelligenceRoutes.js";
 import { createFailureRouter } from "./routes/failureRoutes.js";
+import { createApiGeneratorRouter } from "./routes/apiGeneratorRoutes.js";
+import { createPostmanRouter } from "./routes/postmanRoutes.js";
+import { createPerformanceRouter } from "./routes/performanceRoutes.js";
+import { createAiWorkspaceRouter } from "./routes/aiWorkspaceRoutes.js";
+import { createCoverageRouter } from "./routes/coverageRoutes.js";
+import { createRefactorRouter } from "./routes/refactorRoutes.js";
 import { logJiraTlsStartupHint } from "./services/jira.js";
 
 logJiraTlsStartupHint();
@@ -36,6 +42,12 @@ app.use(express.json({ limit: "8mb" }));
 app.use("/api", createApiRouter());
 app.use("/api/projects", createProjectIntelligenceRouter());
 app.use("/api/failure", createFailureRouter());
+app.use("/api/api-generator", createApiGeneratorRouter());
+app.use("/api/postman", createPostmanRouter());
+app.use("/api/performance", createPerformanceRouter());
+app.use("/api/ai-workspace", createAiWorkspaceRouter());
+app.use("/api/coverage", createCoverageRouter());
+app.use("/api/refactor", createRefactorRouter());
 
 app.use(
   (

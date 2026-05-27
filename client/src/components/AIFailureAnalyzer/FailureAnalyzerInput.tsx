@@ -32,7 +32,7 @@ export function FailureAnalyzerInput() {
 
       <div className="row-actions">
         <ActionWithTip
-          tip="Run Katalon-focused rule-based + AI failure analysis on execution logs and stacktraces."
+          tip="Run Katalon-focused rule-based + Gosi Brain failure analysis on execution logs and stacktraces."
           onClick={onAnalyze}
           disabled={loading}
         >

@@ -1,31 +1,55 @@
 import { useCallback, useRef, useState, type ReactNode } from "react";
 
 const BUBBLE_MAX_W = 300;
+const BUBBLE_EST_HEIGHT = 120;
+const TIP_SHOW_DELAY_MS = 180;
 
-function placeBubble(el: HTMLElement): { top: number; left: number } {
+export type TipPlacement = "auto" | "above" | "below";
+
+function placeBubble(el: HTMLElement, placement: TipPlacement = "auto"): { top: number; left: number } {
   const r = el.getBoundingClientRect();
   let left = Math.max(8, r.left);
   if (left + BUBBLE_MAX_W > window.innerWidth - 8) {
     left = window.innerWidth - BUBBLE_MAX_W - 8;
   }
-  let top = r.bottom + 6;
-  if (top + 140 > window.innerHeight - 8) {
-    top = Math.max(8, r.top - 6);
+
+  const below = r.bottom + 6;
+  const above = Math.max(8, r.top - BUBBLE_EST_HEIGHT - 6);
+
+  let top: number;
+  if (placement === "above") {
+    top = above;
+  } else if (placement === "below") {
+    top = below;
+  } else if (below + BUBBLE_EST_HEIGHT > window.innerHeight - 8) {
+    top = above;
+  } else {
+    top = below;
   }
   return { top, left };
 }
 
 /** Visible help control — hover/focus shows tooltip (fixed, not clipped by scroll). */
-export function TipIcon({ tip }: { tip: string }) {
+export function TipIcon({ tip, placement = "auto" }: { tip: string; placement?: TipPlacement }) {
   const triggerRef = useRef<HTMLSpanElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const show = useCallback(() => {
-    const el = triggerRef.current;
-    if (el) setPos(placeBubble(el));
-  }, []);
+    if (showTimerRef.current) clearTimeout(showTimerRef.current);
+    showTimerRef.current = setTimeout(() => {
+      const el = triggerRef.current;
+      if (el) setPos(placeBubble(el, placement));
+    }, TIP_SHOW_DELAY_MS);
+  }, [placement]);
 
-  const hide = useCallback(() => setPos(null), []);
+  const hide = useCallback(() => {
+    if (showTimerRef.current) {
+      clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+    setPos(null);
+  }, []);
 
   return (
     <span
@@ -145,6 +169,7 @@ type ActionWithTipProps = {
   className?: string;
   disabled?: boolean;
   onClick?: () => void;
+  tipPlacement?: TipPlacement;
 };
 
 export function ActionWithTip({
@@ -153,13 +178,20 @@ export function ActionWithTip({
   className = "btn btn-primary",
   disabled,
   onClick,
+  tipPlacement = "auto",
 }: ActionWithTipProps) {
   return (
     <span className="action-with-tip">
-      <button type="button" className={className} onClick={onClick} disabled={disabled}>
+      <button
+        type="button"
+        className={className}
+        onClick={onClick}
+        disabled={disabled}
+        title={tip}
+      >
         {children}
       </button>
-      <TipIcon tip={tip} />
+      <TipIcon tip={tip} placement={tipPlacement} />
     </span>
   );
 }
@@ -179,6 +211,26 @@ export function ToolbarBtn({ tip, children, className, disabled, onClick }: Tool
         {children}
       </button>
       <TipIcon tip={tip} />
+    </span>
+  );
+}
+
+type LinkWithTipProps = {
+  tip: string;
+  href: string;
+  children: ReactNode;
+  className?: string;
+  tipPlacement?: TipPlacement;
+};
+
+/** Header / nav link with the same i tooltip pattern as tabs and actions. */
+export function LinkWithTip({ tip, href, children, className, tipPlacement = "auto" }: LinkWithTipProps) {
+  return (
+    <span className="action-with-tip">
+      <a href={href} className={className}>
+        {children}
+      </a>
+      <TipIcon tip={tip} placement={tipPlacement} />
     </span>
   );
 }

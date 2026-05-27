@@ -9,6 +9,13 @@ Production-oriented web app that converts:
 
 …into **Katalon Studio Groovy** scripts (WebUI / Mobile keywords).
 
+## What’s new (latest)
+
+- **AI API Automation Architect** (**API Test** tab): generate **enterprise-grade Katalon API Groovy** *and* **Postman Collection v2.1** from the same API input (Swagger/OpenAPI, Postman, cURL, or endpoint JSON).
+- **Performance Test** tab: generate **JMeter (.jmx)**, **k6** load scripts, and a **performance strategy report** from the same API sources (smoke, baseline, stress, spike, soak).
+- **Semantic API intelligence**: endpoints grouped into business modules (Authentication, Users, Orders, Payments, etc.), with chained variables (IDs/tokens), stronger validations, security + boundary scenarios, and readable payload sizes (256/512/1024 — no absurd giant strings).
+- **Postman export**: download `.postman_collection.json` and `.postman_environment.json` (Local/Dev/QA/Staging/Prod templates) with reusable variables and scripts.
+
 This repo supports two generation modes:
 
 - **Deterministic compiler (default)**: no LLM required for compiling steps → Groovy.
@@ -80,6 +87,39 @@ Optional features you can enable in the UI:
 - **Auto-detect locators**: runs Playwright on a URL and merges results with your locator text.
 - **Record mode**: opens a headed browser *on the machine running the server*, records actions, and converts them into steps/locators.
 - **Convert to Katalon Locators**: converts Selenium/Cypress/Playwright locator styles into Katalon-friendly CSS/XPath.
+
+## Performance Test (JMeter + k6)
+
+Open the **Performance Test** tab to turn API definitions into runnable load-test assets:
+
+- **Inputs**: Swagger/OpenAPI, Postman collection, cURL, endpoint JSON, optional **Project Intelligence** APIs
+- **Load modes**: Smoke, Baseline, Stress, Spike, Soak — with VUs, duration, ramp-up, and environment (QA / Staging / Prod-like)
+- **Outputs**: JMeter test plan (thread groups, samplers, CSV, headers, JSON extractors), k6 script (`options.stages`, `setup()` auth, `group()` per semantic module, checks/thresholds), scenario mapping + SLA/risk notes
+
+**API:** `POST /api/performance/generate` — `{ inputType, swagger/spec/collection/curl/endpoint fields, mode, config: { vus, duration, rampUp, environment?, baseUrl? }, projectId?, useProjectApis? }`
+
+---
+
+## AI API Automation Architect (Katalon + Postman)
+
+Open the **API Test** tab to generate production-grade API automation assets:
+
+- **Katalon**: reusable helpers under `Keywords/api/` plus one or more scripts under `Scripts/API/` (split by semantic module when the spec is large).
+- **Postman**: Collection **v2.1** with semantic folders, chained variables, pre-request scripts (requestId/correlationId/timestamp), performance assertions, security scenarios, and environments.
+
+Supported inputs:
+
+- Swagger/OpenAPI (JSON or YAML)
+- Postman collection JSON
+- cURL
+- Endpoint JSON (method + path/URL + request/response examples)
+
+UI actions:
+
+- **Generate Katalon code**
+- **Generate Postman Collection**
+- **Download Groovy** (Katalon view)
+- **Download Postman Collection** / **Download Environment** (Postman view)
 
 ### Custom keywords in steps
 
@@ -336,9 +376,14 @@ kataloncode/
 │       │   ├── testDsl/           # universal step intelligence (classify, normalize, validate)
 │       │   ├── testIntelligence/  # intent parse/expand, assertions, test flow
 │       │   ├── projectIntelligence/  # Katalon zip/rar index, OR + keyword binding
+│       │   ├── projectIntelligenceV2/ # Control + healing + docs (v2 analyze API)
 │       │   ├── katalonCompiler/   # deterministic compiler (see README)
 │       │   ├── healing/           # self-healing locators + Ollama repair
 │       │   ├── groovyLint.ts # lint + web Groovy normalization
+│       │   ├── apiCodeGenerator/     # Katalon API generator (Groovy)
+│       │   ├── postmanGenerator/     # Postman Collection v2.1 generator
+│       │   ├── performanceEngine/    # JMeter + k6 + load strategy from APIs
+│       │   ├── apiArchitect/         # Shared semantic intelligence (folders, chaining, scenarios, assertions)
 │       │   ├── csvParser.ts
 │       │   ├── jira.ts       # REST v3 + runtime credentials; demo if omitted
 │       │   ├── playwright.ts # headless extract locators
@@ -449,6 +494,12 @@ Open **http://localhost:5173** (or the port Vite prints if 5173 is busy).
 |--------|------|---------|
 | `GET` | `/api/health` | Health + Ollama base URL + default model + **Gemini** / **Gosi Brain** configured flags + default model ids |
 | `POST` | `/api/generate` | Body includes `platform`, `steps[]`, optional **`deterministicCompiler`** (default `true` — no LLM; set `false` for legacy Ollama/Gemini), optional `llm`, `model`, `stream`, `mode`, `recordedPlaywrightScript`, `url`, `locators`, `autoDetectLocators`, `pageLocale`, Katalon project XML / imports, optional **`projectId`** + **`projectGenerationMode`** (`strict_reuse` \| `balanced` \| `generate_everything`) to reuse indexed OR/keywords, `testTemplate`, `stylePass`, `commentLanguage`, … → Groovy + **`lint`**. Response may include **`compilerWarnings`**, **`deterministic: true`**, **`projectIntelligence`** (bindings per step). **422** if deterministic output fails validation. **`mode: "record"`** (web only): if `url` is set and `recordedPlaywrightScript` is omitted, runs a **headful** record session on the server, then merges locators; failures fall back to `steps` in the body. With a prior record result, send `recordedPlaywrightScript` and omit `url` to skip re-recording. |
+| `POST` | `/api/api-generator/swagger` | Generate **Katalon API Groovy** from Swagger/OpenAPI (`{ spec, projectId?, testCaseName?, includeNegative?, includeBoundary?, aiMemoryMode? }`) |
+| `POST` | `/api/api-generator/postman` | Generate **Katalon API Groovy** from a Postman collection (`{ collection, ... }`) |
+| `POST` | `/api/api-generator/curl` | Generate **Katalon API Groovy** from cURL (`{ curl, ... }`) |
+| `POST` | `/api/api-generator/endpoint` | Generate **Katalon API Groovy** from endpoint JSON (`{ method?, path?, url?, requestJson?, responseJson?, ... }`) |
+| `POST` | `/api/postman/generate` | Generate **Postman Collection v2.1** + environments (`{ inputType, swagger/spec, collection, curl, method/path/url, requestJson/responseJson, projectId?, aiMemoryEnabled? }`) |
+| `POST` | `/api/performance/generate` | Generate **JMeter + k6 + strategy** (`{ inputType, mode, config: { vus, duration, rampUp, environment?, baseUrl? }, projectId?, useProjectApis?, output? }`) |
 | `GET` | `/api/projects` | List indexed Katalon projects (`server/data/projects/`) |
 | `POST` | `/api/projects/upload` | Multipart `archive` (.zip or .rar) → parsed index |
 | `POST` | `/api/projects/register-path` | `{ folderPath, projectName? }` — self-hosted only; requires `KATALON_PROJECT_LOCAL_PATH_ALLOWED=1` |
@@ -457,6 +508,10 @@ Open **http://localhost:5173** (or the port Vite prints if 5173 is busy).
 | `DELETE` | `/api/projects/:id` | Remove cached project |
 | `POST` | `/api/projects/:id/match` | Preview semantic matches for `steps[]` |
 | `GET` | `/api/projects/:id/search?q=` | Search OR + keywords |
+| `POST` | `/api/projects/:id/v2/analyze` | **Project Intelligence v2** — script fixes, OR healing proposals, project graph, insights, Markdown docs |
+| `POST` | `/api/projects/:id/v2/fix-script` | Click-to-fix one Groovy script (`{ scriptPath }`) — original vs fixed + issues |
+| `POST` | `/api/projects/:id/v2/heal-locator` | Click-to-heal one OR item (`{ orPath, pageUrl? }`) — ranked locators + Katalon/OR snippets |
+| `GET` | `/api/projects/:id/v2/graph` | Project control graph (dependencies, orphans, duplicates) |
 | `POST` | `/api/record/start` | `{ url }` → `{ ok: true }`. Starts **headed** Chromium on the **host running the backend** (non-blocking). Returns `409` if a session is already running. |
 | `POST` | `/api/record/cancel` | Closes the headed browser and clears session state (use after a refresh or if the UI shows “already in progress”). |
 | `GET` | `/api/record/status` | `{ active, url }` — poll while recording; `url` updates on navigation and SPA route changes. |

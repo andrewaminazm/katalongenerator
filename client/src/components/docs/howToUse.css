@@ -1,0 +1,491 @@
+/* How To Use Center — isolated styles (uses global CSS variables from index.css) */
+
+.htu-root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.htu-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: var(--font-body);
+  color: var(--muted);
+}
+
+.htu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.htu-header-brand h1 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-medium);
+  font-weight: 600;
+}
+
+.htu-header-brand p {
+  margin: 0.15rem 0 0;
+  font-size: var(--text-small);
+  color: var(--muted);
+}
+
+.htu-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.htu-btn {
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.htu-btn:hover {
+  border-color: var(--accent);
+}
+
+.htu-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.htu-btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.htu-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .htu-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .htu-sidebar {
+    position: relative !important;
+    max-height: none !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+  }
+}
+
+.htu-sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 1rem;
+  overflow-y: auto;
+  position: sticky;
+  top: 73px;
+  align-self: start;
+  max-height: calc(100vh - 73px);
+}
+
+.htu-search {
+  margin-bottom: 1rem;
+}
+
+.htu-search input {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+}
+
+.htu-search input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.htu-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.htu-filter-chip {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.htu-filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.htu-nav-group {
+  margin-bottom: 1rem;
+}
+
+.htu-nav-group-title {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 0.4rem 0.35rem;
+}
+
+.htu-nav-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  margin-bottom: 0.15rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--text-small);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.htu-nav-link:hover {
+  background: var(--bg);
+}
+
+.htu-nav-link.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.htu-search-hits {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.htu-search-hit {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem;
+  margin-bottom: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+}
+
+.htu-search-hit strong {
+  display: block;
+  font-size: var(--text-small);
+}
+
+.htu-search-hit span {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.htu-main {
+  padding: 1.5rem 2rem 3rem;
+  overflow-y: auto;
+  max-width: 920px;
+}
+
+.htu-section {
+  scroll-margin-top: 5rem;
+  margin-bottom: 3rem;
+  animation: htu-fade-in 0.35s ease;
+}
+
+@keyframes htu-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.htu-section-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.htu-section-header h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-large);
+  font-weight: 600;
+}
+
+.htu-section-header .htu-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.htu-prose {
+  font-size: var(--text-body);
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.htu-steps {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.25rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.htu-step-card {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+}
+
+.htu-step-num {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--text-small);
+}
+
+.htu-step-text {
+  margin: 0;
+  font-size: var(--text-small);
+  line-height: 1.5;
+  align-self: center;
+}
+
+.htu-block {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.htu-block h3 {
+  margin: 0 0 0.5rem;
+  font-size: var(--text-small);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.htu-block ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: var(--text-small);
+}
+
+.htu-block li {
+  margin: 0.25rem 0;
+}
+
+.htu-block--tip {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.htu-block--warn {
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+}
+
+.htu-block--mistake {
+  background: var(--bg);
+}
+
+.htu-example {
+  position: relative;
+  margin: 0.5rem 0;
+  padding: 0.75rem 2.5rem 0.75rem 0.85rem;
+  border-radius: 8px;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  font-family: var(--font-code);
+  font-size: var(--text-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.htu-copy-btn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  font-size: 0.65rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--code-fg);
+  cursor: pointer;
+}
+
+.htu-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.htu-media-placeholder {
+  margin: 1rem 0;
+  padding: 2rem 1rem;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--text-small);
+}
+
+.htu-assistant {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 30;
+}
+
+.htu-assistant-toggle {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.25rem;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.htu-assistant-panel {
+  position: absolute;
+  bottom: 3.5rem;
+  right: 0;
+  width: min(340px, calc(100vw - 2rem));
+  max-height: 420px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  animation: htu-fade-in 0.2s ease;
+}
+
+.htu-assistant-panel header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: var(--text-small);
+}
+
+.htu-assistant-body {
+  padding: 0.75rem 1rem;
+  overflow-y: auto;
+  font-size: var(--text-small);
+}
+
+.htu-assistant-q {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text);
+}
+
+.htu-assistant-q:hover {
+  border-color: var(--accent);
+}
+
+.htu-assistant-answer {
+  margin-top: 0.5rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.htu-single-view .htu-section {
+  margin-bottom: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -143,7 +143,13 @@ export interface ProjectMeta {
 }
 
 export interface ProjectIndexSummary extends ProjectMeta {
-  testObjects: { label: string; path: string; selectorType: string }[];
+  testObjects: {
+    label: string;
+    path: string;
+    selectorType: string;
+    selector?: string;
+    sourceFile?: string;
+  }[];
   keywords: { className: string; customKeywordsPath: string; methods: { name: string; signature: string }[] }[];
   testScripts?: {
     logicalPath: string;
@@ -182,6 +188,146 @@ export async function fetchKatalonProject(projectId: string): Promise<ProjectInd
   if (!res.ok) throw new Error(data.error || res.statusText);
   if (!data.project) throw new Error("Project not found");
   return data.project;
+}
+
+export interface ProjectIntelligenceV2Result {
+  projectId: string;
+  projectName: string;
+  analyzedAt: string;
+  fixes: {
+    testCases: {
+      scriptPath: string;
+      logicalPath: string;
+      original: string;
+      fixed: string;
+      diffSummary: string[];
+      changed: boolean;
+    }[];
+    objectRepository: {
+      orPath: string;
+      label: string;
+      oldLocator: { type: string; value: string };
+      newLocator: { type: string; value: string };
+      confidence: number;
+      reason: string;
+      severity: string;
+      impactedScripts: string[];
+    }[];
+    keywords: { filePath: string; className: string; issue: string; suggestion: string }[];
+  };
+  documentation: { markdown: string; sections: Record<string, string> };
+  projectGraph: {
+    orphans: { testObjects: string[]; keywords: string[] };
+    duplicates: { testObjects: { selector: string; paths: string[] }[] };
+  };
+  insights: {
+    flakyTests: { logicalPath: string; riskScore: number; reasons: string[] }[];
+    unusedAssets: { kind: string; label: string; reason: string }[];
+    riskScore: number;
+    refactoringHints: string[];
+  };
+  warnings: string[];
+}
+
+export interface ScriptFixItemResult {
+  fix: {
+    scriptPath: string;
+    logicalPath: string;
+    original: string;
+    fixed: string;
+    diffSummary: string[];
+    changed: boolean;
+    explanations?: { ruleId: string; severity: string; reason: string; confidence: number }[];
+  };
+  issues: { ruleId: string; severity: string; message: string; confidence: number }[];
+}
+
+export interface LocatorHealItemResult {
+  orPath: string;
+  label: string;
+  oldLocator: { type: string; value: string };
+  newLocator: { type: string; value: string };
+  confidence: number;
+  reason: string;
+  impactedScripts: string[];
+  candidates: { type: string; value: string; score: number; source: string }[];
+  katalonSnippet: string;
+  rsPreview: string;
+  playwrightUsed: boolean;
+  warnings: string[];
+}
+
+export async function fixProjectScript(
+  projectId: string,
+  scriptPath: string
+): Promise<ScriptFixItemResult> {
+  const res = await fetch(
+    `${API_BASE}/api/projects/${encodeURIComponent(projectId)}/v2/fix-script`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scriptPath }),
+    }
+  );
+  const data = (await res.json().catch(() => ({}))) as ScriptFixItemResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function healProjectLocator(
+  projectId: string,
+  orPath: string,
+  pageUrl?: string
+): Promise<LocatorHealItemResult> {
+  const res = await fetch(
+    `${API_BASE}/api/projects/${encodeURIComponent(projectId)}/v2/heal-locator`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orPath, pageUrl: pageUrl?.trim() || undefined }),
+    }
+  );
+  const data = (await res.json().catch(() => ({}))) as LocatorHealItemResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function analyzeProjectIntelligenceV2(
+  projectId: string,
+  options?: {
+    healScripts?: boolean;
+    healLocators?: boolean;
+    generateDocumentation?: boolean;
+    maxScripts?: number;
+  }
+): Promise<ProjectIntelligenceV2Result> {
+  const res = await fetch(`${API_BASE}/api/projects/${encodeURIComponent(projectId)}/v2/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options ?? {}),
+  });
+  const data = (await res.json().catch(() => ({}))) as ProjectIntelligenceV2Result & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function downloadProjectDocumentationPdf(
+  projectId: string,
+  payload: { markdown: string; projectName?: string; title?: string }
+): Promise<Blob> {
+  const res = await fetch(
+    `${API_BASE}/api/projects/${encodeURIComponent(projectId)}/v2/documentation/pdf`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || res.statusText);
+  }
+  return res.blob();
 }
 
 export interface LintIssue {
@@ -1037,4 +1183,503 @@ export async function fetchFailurePatterns(): Promise<
   const data = (await res.json().catch(() => ({}))) as { patterns?: unknown[]; error?: string };
   if (!res.ok) throw new Error(data.error || res.statusText);
   return (data.patterns ?? []) as Awaited<ReturnType<typeof fetchFailurePatterns>>;
+}
+
+export interface ApiCodegenPreview {
+  endpoints: { method: string; path: string; name: string; auth?: string }[];
+  authType: string;
+  validationStrategy: string;
+  scenarioCount: number;
+}
+
+export interface GeneratedGroovyFile {
+  path: string;
+  kind: "keyword" | "script";
+  content: string;
+}
+
+export interface ApiCodegenResult {
+  groovyCode: string;
+  files: GeneratedGroovyFile[];
+  requestObjects: string[];
+  schemaAssertions: string[];
+  negativeTests: string[];
+  boundaryTests: string[];
+  reusableHelpers: string[];
+  warnings: string[];
+  preview: ApiCodegenPreview;
+}
+
+export interface ApiGeneratorPayload {
+  projectId?: string;
+  testCaseName?: string;
+  includeNegative?: boolean;
+  includeBoundary?: boolean;
+  includeHelpers?: boolean;
+  aiMemoryMode?: string;
+}
+
+async function postApiGenerator<T extends ApiGeneratorPayload>(
+  path: string,
+  body: T
+): Promise<ApiCodegenResult> {
+  const res = await fetch(`${API_BASE}/api/api-generator/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json().catch(() => ({}))) as ApiCodegenResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export function generateApiFromSwagger(
+  payload: ApiGeneratorPayload & { spec: string }
+): Promise<ApiCodegenResult> {
+  return postApiGenerator("swagger", payload);
+}
+
+export function generateApiFromPostman(
+  payload: ApiGeneratorPayload & { collection: string }
+): Promise<ApiCodegenResult> {
+  return postApiGenerator("postman", payload);
+}
+
+export function generateApiFromEndpoint(
+  payload: ApiGeneratorPayload & {
+    method?: string;
+    path?: string;
+    url?: string;
+    requestJson?: string;
+    responseJson?: string;
+  }
+): Promise<ApiCodegenResult> {
+  return postApiGenerator("endpoint", payload);
+}
+
+export function generateApiFromCurl(
+  payload: ApiGeneratorPayload & { curl: string }
+): Promise<ApiCodegenResult> {
+  return postApiGenerator("curl", payload);
+}
+
+export interface PostmanEnvironmentFile {
+  id: string;
+  name: string;
+  values: { key: string; value: string; enabled: boolean }[];
+}
+
+export interface PostmanGenerateResult {
+  collection: Record<string, unknown>;
+  environments: PostmanEnvironmentFile[];
+  warnings: string[];
+  generatedTests: string[];
+  collectionJson: string;
+}
+
+export interface PostmanGeneratePayload extends ApiGeneratorPayload {
+  inputType?: "swagger" | "endpoint" | "curl" | "postman";
+  swagger?: string;
+  spec?: string;
+  collection?: string;
+  curl?: string;
+  method?: string;
+  path?: string;
+  url?: string;
+  requestJson?: string;
+  responseJson?: string;
+  baseUrl?: string;
+  aiMemoryEnabled?: boolean;
+  generatedApiFlow?: boolean;
+}
+
+export async function generatePostmanCollection(
+  payload: PostmanGeneratePayload
+): Promise<PostmanGenerateResult> {
+  const res = await fetch(`${API_BASE}/api/postman/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as PostmanGenerateResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export type PerformanceMode = "smoke" | "baseline" | "stress" | "spike" | "soak";
+
+export interface PerformanceScenario {
+  id: string;
+  name: string;
+  module: string;
+  endpoints: string[];
+  vus: number;
+  duration: string;
+  rampUp: string;
+  description: string;
+}
+
+export interface PerformanceStrategyReport {
+  scenarios: PerformanceScenario[];
+  loadModel: {
+    mode: PerformanceMode;
+    totalVus: number;
+    duration: string;
+    rampUp: string;
+    stages: { duration: string; target: number }[];
+    perCategory: Record<string, { vus: number; weight: number }>;
+  };
+  riskAnalysis: string[];
+  slaRecommendations: string[];
+  bottleneckHints: string[];
+  dependencyRisks: string[];
+}
+
+export interface PerformanceGenerateResult {
+  jmeter: string;
+  k6: string;
+  strategy: PerformanceStrategyReport;
+  warnings: string[];
+  baseUrl: string;
+  endpointCount: number;
+}
+
+export interface PerformanceGeneratePayload {
+  inputType?: "openapi" | "postman" | "curl" | "endpoint" | "project";
+  swagger?: string;
+  spec?: string;
+  collection?: string;
+  curl?: string;
+  method?: string;
+  path?: string;
+  url?: string;
+  requestJson?: string;
+  responseJson?: string;
+  testCaseName?: string;
+  projectId?: string;
+  useProjectApis?: boolean;
+  mode?: PerformanceMode;
+  config?: {
+    vus?: number;
+    duration?: string;
+    rampUp?: string;
+    environment?: "local" | "qa" | "staging" | "production";
+    baseUrl?: string;
+  };
+  output?: ("jmeter" | "k6" | "strategy")[];
+}
+
+export async function generatePerformanceSuite(
+  payload: PerformanceGeneratePayload
+): Promise<PerformanceGenerateResult> {
+  const res = await fetch(`${API_BASE}/api/performance/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as PerformanceGenerateResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+/* ——— AI QA Chat Workspace ——— */
+
+export type WorkspaceIntent =
+  | "generate"
+  | "analyze"
+  | "explain"
+  | "optimize"
+  | "document"
+  | "review"
+  | "heal"
+  | "convert"
+  | "performance"
+  | "api"
+  | "unknown";
+
+export type WorkspaceAgent =
+  | "script_generator"
+  | "api_agent"
+  | "performance_agent"
+  | "project_intelligence"
+  | "healing_agent"
+  | "review_agent"
+  | "documentation_agent"
+  | "qa_advisor";
+
+export interface WorkspaceContextPayload {
+  activeTab?: string;
+  platform?: Platform;
+  projectId?: string;
+  projectGenerationMode?: ProjectGenerationMode;
+  aiMemoryMode?: "disabled" | "learn_only" | "learn_suggest" | "adaptive";
+  testCaseName?: string;
+  pageUrl?: string;
+  swagger?: string;
+  postmanCollection?: string;
+  steps?: string[];
+  locators?: string;
+}
+
+export interface WorkspaceChatResponse {
+  sessionId: string;
+  intent: WorkspaceIntent;
+  agent: WorkspaceAgent;
+  response: string;
+  actions: Array<{ type: string; label: string; detail?: string }>;
+  generatedAssets: Array<{
+    kind: string;
+    title: string;
+    content: string;
+    language?: string;
+  }>;
+  suggestions: string[];
+  confidence: number;
+  code?: string;
+  model?: string;
+  warnings?: string[];
+}
+
+const WORKSPACE_GOSI_TOKEN_KEY = "katalon:gosi_token";
+
+export async function sendWorkspaceChat(payload: {
+  sessionId?: string;
+  message: string;
+  context?: WorkspaceContextPayload;
+  model?: string;
+}): Promise<WorkspaceChatResponse> {
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem(WORKSPACE_GOSI_TOKEN_KEY)?.trim()
+      : "";
+  const res = await fetch(`${API_BASE}/api/ai-workspace/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...payload,
+      authorization_token: token || undefined,
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as WorkspaceChatResponse & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function updateWorkspaceContext(
+  sessionId: string | undefined,
+  context: WorkspaceContextPayload
+): Promise<{ sessionId: string; context: WorkspaceContextPayload }> {
+  const res = await fetch(`${API_BASE}/api/ai-workspace/context`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, context }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    sessionId: string;
+    context: WorkspaceContextPayload;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function fetchWorkspaceHistory(sessionId: string): Promise<{
+  sessionId: string;
+  messages: Array<{ id: string; role: "user" | "assistant"; content: string; timestamp: string }>;
+  context: WorkspaceContextPayload;
+}> {
+  const res = await fetch(`${API_BASE}/api/ai-workspace/history/${encodeURIComponent(sessionId)}`);
+  const data = (await res.json().catch(() => ({}))) as {
+    sessionId: string;
+    messages: Array<{ id: string; role: "user" | "assistant"; content: string; timestamp: string }>;
+    context: WorkspaceContextPayload;
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+/* ——— AI Coverage Analyzer ——— */
+
+export interface CoverageAnalysisResult {
+  projectId: string;
+  projectName: string;
+  analyzedAt: string;
+  fromCache?: boolean;
+  overallCoverage: number;
+  riskScore: number;
+  maintainabilityScore: number;
+  flakyIndicatorCount: number;
+  missingScenarioCount: number;
+  modules: Array<{
+    module: string;
+    coverageScore: number;
+    riskLevel: string;
+    assertionScore: number;
+    missingScenarios: string[];
+    recommendations: string[];
+    testScriptCount: number;
+    orUsageScore: number;
+  }>;
+  missingScenarios: Array<{
+    id: string;
+    module: string;
+    scenario: string;
+    severity: string;
+    source: string;
+  }>;
+  weakAssertions: Array<{
+    scriptPath: string;
+    logicalPath: string;
+    actionCount: number;
+    verifyCount: number;
+    reason: string;
+  }>;
+  unusedAssets: Array<{ kind: string; path: string; reason: string }>;
+  recommendations: Array<{
+    id: string;
+    severity: string;
+    category: string;
+    title: string;
+    detail: string;
+    affectedItems?: string[];
+  }>;
+  businessFlows: Array<{
+    name: string;
+    coveragePercent: number;
+    relatedScripts: string[];
+    gaps: string[];
+    riskLevel: string;
+  }>;
+  duplicateFlows: Array<{ pattern: string; scripts: string[] }>;
+  apiCoverage?: {
+    totalEndpoints: number;
+    referencedInOr: number;
+    referencedInScripts: number;
+    untestedEndpoints: string[];
+    missingStatusValidations: string[];
+    coveragePercent: number;
+  };
+  heatmap: Array<{
+    module: string;
+    coverage: number;
+    risk: number;
+    assertionQuality: number;
+  }>;
+  coverageGraph: {
+    nodeCount: number;
+    edgeCount: number;
+    orphans: { testObjects: string[]; keywords: string[]; testScripts: string[] };
+    duplicateFlowCount: number;
+  };
+}
+
+export async function analyzeCoverage(payload: {
+  projectId: string;
+  swagger?: string;
+  postmanCollection?: string;
+  requirements?: string;
+  forceRefresh?: boolean;
+}): Promise<CoverageAnalysisResult> {
+  const res = await fetch(`${API_BASE}/api/coverage/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as CoverageAnalysisResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function fetchCoverageProject(projectId: string): Promise<CoverageAnalysisResult> {
+  const res = await fetch(`${API_BASE}/api/coverage/project/${encodeURIComponent(projectId)}`);
+  const data = (await res.json().catch(() => ({}))) as CoverageAnalysisResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export type RefactorSeverity = "low" | "medium" | "high" | "critical" | "info";
+export type FixComplexity = "low" | "medium" | "high";
+
+export interface RefactorRecommendation {
+  id: string;
+  category: string;
+  severity: RefactorSeverity;
+  confidence: number;
+  impactScore: number;
+  fixComplexity: FixComplexity;
+  title: string;
+  detail: string;
+  whyItMatters: string;
+  affectedFiles: string[];
+  suggestedSolution: string;
+  beforeExample?: string;
+  afterExample?: string;
+  estimatedImpact: string;
+  priority: number;
+}
+
+export interface RefactorAnalysisResult {
+  projectId: string;
+  projectName: string;
+  analyzedAt: string;
+  fromCache: boolean;
+  maintainabilityScore: number;
+  duplicationScore: number;
+  frameworkHealthScore: number;
+  assertionQualityScore: number;
+  frameworkComplexityScore: number;
+  orHealthScore: number;
+  waitStabilityScore: number;
+  issues: Array<Record<string, unknown>>;
+  recommendations: RefactorRecommendation[];
+  duplicateFlows: Array<{
+    pattern: string;
+    scripts: string[];
+    suggestedKeyword?: string;
+    estimatedSavings?: string;
+  }>;
+  weakAssertions: Array<{
+    scriptPath: string;
+    logicalPath: string;
+    reason: string;
+    suggestion: string;
+  }>;
+  orProblems: Array<{ path: string; problem: string; recommendation: string }>;
+  keywordProblems: Array<{
+    path: string;
+    className: string;
+    problem: string;
+    recommendation: string;
+  }>;
+  architectureInsights: Array<{
+    id: string;
+    area: string;
+    insight: string;
+    recommendation: string;
+    severity: RefactorSeverity;
+  }>;
+  duplicationHeatmap: Array<{ module: string; duplicationRisk: number; scriptCount: number }>;
+}
+
+export async function analyzeRefactor(payload: {
+  projectId: string;
+  forceRefresh?: boolean;
+  maxScripts?: number;
+}): Promise<RefactorAnalysisResult> {
+  const res = await fetch(`${API_BASE}/api/refactor/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await res.json().catch(() => ({}))) as RefactorAnalysisResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+export async function fetchRefactorProject(projectId: string): Promise<RefactorAnalysisResult> {
+  const res = await fetch(`${API_BASE}/api/refactor/project/${encodeURIComponent(projectId)}`);
+  const data = (await res.json().catch(() => ({}))) as RefactorAnalysisResult & { error?: string };
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
 }

@@ -231,7 +231,62 @@ export function HelpMenu({ onOpenWizard }: HelpMenuProps) {
                 setHelpTopic("failure");
               }}
             >
-              AI Failure Analyzer
+              Gosi Brain Failure Analyzer
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="help-menu-item"
+              onClick={() => {
+                setOpen(false);
+                setHelpTopic("apiGenerator");
+              }}
+            >
+              API Test
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="help-menu-item"
+              onClick={() => {
+                setOpen(false);
+                setHelpTopic("performanceTest");
+              }}
+            >
+              Performance Test
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="help-menu-item"
+              onClick={() => {
+                setOpen(false);
+                setHelpTopic("aiWorkspace");
+              }}
+            >
+              Gosi Brain QA Workspace
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="help-menu-item"
+              onClick={() => {
+                setOpen(false);
+                setHelpTopic("coverageAnalyzer");
+              }}
+            >
+              Gosi Brain Coverage Analyzer
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="help-menu-item"
+              onClick={() => {
+                setOpen(false);
+                setHelpTopic("refactorAssistant");
+              }}
+            >
+              Gosi Brain Refactoring Assistant
             </button>
             <button
               type="button"
@@ -253,7 +308,7 @@ export function HelpMenu({ onOpenWizard }: HelpMenuProps) {
                 setHelpTopic("aiMemory");
               }}
             >
-              AI memory (team style)
+              Gosi Brain memory (team style)
             </button>
           </div>
         )}

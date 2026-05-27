@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  analyzeProjectIntelligenceV2,
+  downloadProjectDocumentationPdf,
   fetchKatalonProject,
+  fixProjectScript,
+  healProjectLocator,
   listKatalonProjects,
   uploadKatalonProjectZip,
+  type LocatorHealItemResult,
   type ProjectGenerationMode,
+  type ProjectIntelligenceV2Result,
   type ProjectMeta,
+  type ScriptFixItemResult,
 } from "./api";
-import { FieldBlock, TipIcon } from "./FieldTip";
+import { ItemFixPanel } from "./components/ProjectIntelligence/ItemFixPanel";
+import { ActionWithTip, FieldBlock, TabWithTip, TipIcon } from "./FieldTip";
 import { TIPS } from "./fieldTips";
 
 type Props = {
@@ -28,6 +36,51 @@ export function ProjectIntelligencePanel({
   const [explorerTab, setExplorerTab] = useState<"or" | "keywords" | "scripts" | "flows">("or");
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof fetchKatalonProject>> | null>(null);
   const [search, setSearch] = useState("");
+  const [v2Loading, setV2Loading] = useState(false);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+  const [v2Result, setV2Result] = useState<ProjectIntelligenceV2Result | null>(null);
+  const [itemLoading, setItemLoading] = useState(false);
+  const [scriptFix, setScriptFix] = useState<ScriptFixItemResult | null>(null);
+  const [locatorHeal, setLocatorHeal] = useState<LocatorHealItemResult | null>(null);
+  const [selectedScriptPath, setSelectedScriptPath] = useState<string | null>(null);
+  const [selectedOrPath, setSelectedOrPath] = useState<string | null>(null);
+  const [healPageUrl, setHealPageUrl] = useState("");
+
+  const onScriptClick = async (scriptPath: string) => {
+    if (!activeProjectId) return;
+    setSelectedScriptPath(scriptPath);
+    setSelectedOrPath(null);
+    setLocatorHeal(null);
+    setItemLoading(true);
+    setError(null);
+    try {
+      const r = await fixProjectScript(activeProjectId, scriptPath);
+      setScriptFix(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Script fix failed");
+      setScriptFix(null);
+    } finally {
+      setItemLoading(false);
+    }
+  };
+
+  const onLocatorClick = async (orPath: string, pageUrl?: string) => {
+    if (!activeProjectId) return;
+    setSelectedOrPath(orPath);
+    setSelectedScriptPath(null);
+    setScriptFix(null);
+    setItemLoading(true);
+    setError(null);
+    try {
+      const r = await healProjectLocator(activeProjectId, orPath, pageUrl ?? healPageUrl);
+      setLocatorHeal(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Locator healing failed");
+      setLocatorHeal(null);
+    } finally {
+      setItemLoading(false);
+    }
+  };
 
   const refreshList = useCallback(async () => {
     try {
@@ -119,7 +172,9 @@ export function ProjectIntelligencePanel({
       <p className="hint" style={{ margin: "0 0 0.75rem" }}>
         Upload a full Katalon Studio <strong>.zip</strong> or <strong>.rar</strong> archive to index
         Object Repository, Keywords, and <strong>test scripts</strong> (Scripts/, Test Cases/, Include/).
-        Generation reuses matching assets when an active project is selected.
+        Generation reuses matching assets when an active project is selected. Click a{" "}
+        <strong>test script</strong> to regenerate/fix its Groovy, or an <strong>Object Repository</strong> row to
+        get the best locator.
       </p>
 
       <div className="field-block" style={{ marginBottom: "0.5rem" }}>
@@ -181,6 +236,76 @@ export function ProjectIntelligencePanel({
 
       {error && <p className="status-msg error">{error}</p>}
 
+      {activeProjectId && (
+        <div className="row-actions" style={{ marginBottom: "0.75rem" }}>
+          <ActionWithTip
+            tip={TIPS.projectAnalyze}
+            tipPlacement="above"
+            disabled={v2Loading}
+            onClick={async () => {
+              setV2Loading(true);
+              setError(null);
+              try {
+                const r = await analyzeProjectIntelligenceV2(activeProjectId);
+                setV2Result(r);
+              } catch (e) {
+                setError(e instanceof Error ? e.message : "Analysis failed");
+                setV2Result(null);
+              } finally {
+                setV2Loading(false);
+              }
+            }}
+          >
+            {v2Loading ? "Analyzing…" : "Project Analyze"}
+          </ActionWithTip>
+          {v2Result?.documentation?.markdown && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-small"
+              disabled={pdfDownloading}
+              onClick={async () => {
+                if (!activeProjectId || pdfDownloading) return;
+                setPdfDownloading(true);
+                setError(null);
+                try {
+                  const blob = await downloadProjectDocumentationPdf(activeProjectId, {
+                    markdown: v2Result.documentation.markdown,
+                    projectName: v2Result.projectName,
+                    title: `${v2Result.projectName} — Project documentation`,
+                  });
+                  const a = document.createElement("a");
+                  const url = URL.createObjectURL(blob);
+                  a.href = url;
+                  a.download = `${v2Result.projectName.replace(/\s+/g, "_")}-docs.pdf`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "PDF download failed");
+                } finally {
+                  setPdfDownloading(false);
+                }
+              }}
+            >
+              {pdfDownloading ? "Generating PDF…" : "Download docs (PDF)"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {v2Result && (
+        <div className="status-banner" style={{ marginBottom: "0.75rem" }}>
+          <strong>v2 analysis</strong> — risk {v2Result.insights.riskScore}/100 ·{" "}
+          {v2Result.fixes.testCases.filter((t) => t.changed).length} script fix(es) ·{" "}
+          {v2Result.fixes.objectRepository.length} OR proposal(s) ·{" "}
+          {v2Result.insights.flakyTests.length} flaky flag(s)
+          {v2Result.warnings.length > 0 && (
+            <p className="hint" style={{ margin: "0.35rem 0 0" }}>
+              {v2Result.warnings.join(" · ")}
+            </p>
+          )}
+        </div>
+      )}
+
       {detail && (
         <>
           <p className="katalon-loaded-summary">
@@ -204,38 +329,38 @@ export function ProjectIntelligencePanel({
           </FieldBlock>
 
           <div className="tabs" role="tablist">
-            <button
-              type="button"
-              className={`tab ${explorerTab === "or" ? "active" : ""}`}
+            <TabWithTip
+              tip={TIPS.projectExplorerOr}
+              active={explorerTab === "or"}
               onClick={() => setExplorerTab("or")}
             >
               Object Repository ({filteredOr.length})
-            </button>
-            <button
-              type="button"
-              className={`tab ${explorerTab === "keywords" ? "active" : ""}`}
+            </TabWithTip>
+            <TabWithTip
+              tip={TIPS.projectExplorerKeywords}
+              active={explorerTab === "keywords"}
               onClick={() => setExplorerTab("keywords")}
             >
               Keywords ({filteredKw.length})
-            </button>
-            <button
-              type="button"
-              className={`tab ${explorerTab === "scripts" ? "active" : ""}`}
+            </TabWithTip>
+            <TabWithTip
+              tip={TIPS.projectExplorerScripts}
+              active={explorerTab === "scripts"}
               onClick={() => setExplorerTab("scripts")}
             >
               Test scripts ({filteredScripts.length})
-            </button>
-            <button
-              type="button"
-              className={`tab ${explorerTab === "flows" ? "active" : ""}`}
+            </TabWithTip>
+            <TabWithTip
+              tip={TIPS.projectExplorerFlows}
+              active={explorerTab === "flows"}
               onClick={() => setExplorerTab("flows")}
             >
               Reusable flows ({detail.reusableFlows?.length ?? 0})
-            </button>
+            </TabWithTip>
           </div>
 
           <div
-            className="loc-convert-report"
+            className="loc-convert-report pi-explorer-table"
             style={{ maxHeight: 220, marginTop: "0.5rem" }}
           >
             {explorerTab === "or" && (
@@ -249,7 +374,12 @@ export function ProjectIntelligencePanel({
                 </thead>
                 <tbody>
                   {filteredOr.slice(0, 80).map((o) => (
-                    <tr key={o.path}>
+                    <tr
+                      key={o.path}
+                      className={`pi-explorer-row${selectedOrPath === o.path ? " pi-explorer-row--active" : ""}`}
+                      title="Click to heal locator"
+                      onClick={() => void onLocatorClick(o.path)}
+                    >
                       <td>{o.label}</td>
                       <td className="loc-convert-code">{o.path}</td>
                       <td>{o.selectorType}</td>
@@ -269,7 +399,12 @@ export function ProjectIntelligencePanel({
                 </thead>
                 <tbody>
                   {filteredScripts.slice(0, 80).map((s) => (
-                    <tr key={s.scriptPath}>
+                    <tr
+                      key={s.scriptPath}
+                      className={`pi-explorer-row${selectedScriptPath === s.scriptPath ? " pi-explorer-row--active" : ""}`}
+                      title="Click to fix / regenerate script"
+                      onClick={() => void onScriptClick(s.scriptPath)}
+                    >
                       <td>{s.displayName}</td>
                       <td className="loc-convert-code">{s.logicalPath}</td>
                       <td>{s.kind}</td>
@@ -308,6 +443,35 @@ export function ProjectIntelligencePanel({
                 </p>
               ))}
           </div>
+
+          {(selectedScriptPath || selectedOrPath) && (
+            <ItemFixPanel
+              {...(selectedScriptPath
+                ? {
+                    kind: "script" as const,
+                    loading: itemLoading,
+                    result: scriptFix,
+                    onClose: () => {
+                      setSelectedScriptPath(null);
+                      setScriptFix(null);
+                    },
+                  }
+                : {
+                    kind: "locator" as const,
+                    loading: itemLoading,
+                    result: locatorHeal,
+                    pageUrl: healPageUrl,
+                    onPageUrlChange: setHealPageUrl,
+                    onRetryWithUrl: () => {
+                      if (selectedOrPath) void onLocatorClick(selectedOrPath, healPageUrl);
+                    },
+                    onClose: () => {
+                      setSelectedOrPath(null);
+                      setLocatorHeal(null);
+                    },
+                  })}
+            />
+          )}
         </>
       )}
     </div>

@@ -33,7 +33,7 @@ import {
   type StylePass,
 } from "./api";
 import { ProjectIntelligencePanel } from "./ProjectIntelligencePanel";
-import { ActionWithTip, CheckboxTip, FieldBlock, TabWithTip, TipIcon, ToolbarBtn } from "./FieldTip";
+import { ActionWithTip, CheckboxTip, FieldBlock, LinkWithTip, TabWithTip, TipIcon, ToolbarBtn } from "./FieldTip";
 import { TIPS } from "./fieldTips";
 import {
   HelpMenu,
@@ -46,9 +46,15 @@ import type { StepTemplate } from "./onboardingContent";
 import { FailureAnalyzerProvider } from "./components/AIFailureAnalyzer/FailureAnalyzerContext";
 import { FailureAnalyzerInput } from "./components/AIFailureAnalyzer/FailureAnalyzerInput";
 import { FailureAnalyzerResults } from "./components/AIFailureAnalyzer/FailureAnalyzerResults";
+import { AIApiGeneratorProvider } from "./components/AIApiGenerator/AIApiGeneratorContext";
+import { AIApiGeneratorTab } from "./components/AIApiGenerator/AIApiGeneratorTab";
+import { GeneratedCodePanel } from "./components/AIApiGenerator/GeneratedCodePanel";
+import { AIPerformanceProvider } from "./components/AIPerformance/AIPerformanceContext";
+import { AIPerformanceTab } from "./components/AIPerformance/AIPerformanceTab";
+import { PerformanceOutputPanel } from "./components/AIPerformance/PerformanceOutputPanel";
 import "./App.css";
 
-type InputTab = "manual" | "csv" | "jira" | "record" | "failure";
+type InputTab = "manual" | "csv" | "jira" | "record" | "failure" | "api" | "performance";
 
 /** Mobile WebView passes `?token=` once; we persist the Bearer value for /api/generate. */
 const GOSI_TOKEN_KEY = "katalon:gosi_token";
@@ -825,6 +831,18 @@ export default function App() {
                 : gosiConfigHint ?? "Gosi Brain: not configured on API server"}
             </span>
           )}
+          <LinkWithTip tip={TIPS.headerDocumentation} href="/how-to-use" className="theme-toggle header-docs-link">
+            Documentation
+          </LinkWithTip>
+          <LinkWithTip tip={TIPS.headerAiWorkspace} href="/ai-workspace" className="theme-toggle header-docs-link">
+            AI Workspace
+          </LinkWithTip>
+          <LinkWithTip tip={TIPS.headerCoverage} href="/coverage" className="theme-toggle header-docs-link">
+            Coverage
+          </LinkWithTip>
+          <LinkWithTip tip={TIPS.headerRefactor} href="/refactor" className="theme-toggle header-docs-link">
+            Refactor
+          </LinkWithTip>
           <HelpMenu onOpenWizard={openWizard} />
           <button
             type="button"
@@ -844,6 +862,8 @@ export default function App() {
         authorizationToken={gosiToken.trim() || localStorage.getItem(GOSI_TOKEN_KEY)?.trim() || undefined}
         model={model}
       >
+      <AIApiGeneratorProvider activeProjectId={activeProjectId} aiMemoryMode={aiMemoryMode}>
+      <AIPerformanceProvider activeProjectId={activeProjectId}>
       <div className="app-body">
         <section className="panel">
           <div className="tabs" role="tablist">
@@ -866,6 +886,12 @@ export default function App() {
             </TabWithTip>
             <TabWithTip tip={TIPS.tabFailure} active={tab === "failure"} onClick={() => setTab("failure")}>
               AI Failure Analyzer
+            </TabWithTip>
+            <TabWithTip tip={TIPS.tabApiGenerator} active={tab === "api"} onClick={() => setTab("api")}>
+              API Test
+            </TabWithTip>
+            <TabWithTip tip={TIPS.tabPerformance} active={tab === "performance"} onClick={() => setTab("performance")}>
+              Performance Test
             </TabWithTip>
           </div>
 
@@ -1144,9 +1170,13 @@ export default function App() {
             </div>
           ) : tab === "failure" ? (
             <FailureAnalyzerInput />
+          ) : tab === "api" ? (
+            <AIApiGeneratorTab />
+          ) : tab === "performance" ? (
+            <AIPerformanceTab />
           ) : null}
 
-          {tab !== "failure" && (
+          {tab !== "failure" && tab !== "api" && tab !== "performance" && (
           <>
           <div className="stack" style={{ marginTop: "1rem" }}>
             <div className="row-2">
@@ -1237,7 +1267,7 @@ export default function App() {
             />
 
             {activeProjectId && (
-              <FieldBlock tip={TIPS.aiMemory} label="AI memory (team style)" htmlFor="ai-memory-mode">
+              <FieldBlock tip={TIPS.aiMemory} label="Gosi Brain memory (team style)" htmlFor="ai-memory-mode">
                 <select
                   id="ai-memory-mode"
                   className="input"
@@ -1599,6 +1629,10 @@ export default function App() {
         <section className="panel code-panel">
           {tab === "failure" ? (
             <FailureAnalyzerResults />
+          ) : tab === "api" ? (
+            <GeneratedCodePanel />
+          ) : tab === "performance" ? (
+            <PerformanceOutputPanel />
           ) : (
           <>
           <div className="code-panel-header">
@@ -1709,6 +1743,8 @@ export default function App() {
           )}
         </section>
       </div>
+      </AIPerformanceProvider>
+      </AIApiGeneratorProvider>
       </FailureAnalyzerProvider>
     </div>
   );
