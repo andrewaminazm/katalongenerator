@@ -105,6 +105,10 @@ export default function ExecutionReport() {
             <strong>Download PDF</strong> saves the same report as a shareable document.
           </li>
         </ul>
+        <p className="page-info-hint">
+          Tip: open <strong>Documentation</strong> from the header and search <strong>AI Execution Report Generator</strong>{" "}
+          for the full guide (form fields, release scoring, PDF export, and troubleshooting).
+        </p>
       </PageInfoGuide>
 
       <div className="er-toolbar">

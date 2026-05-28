@@ -80,6 +80,9 @@ export default function HowToUse() {
           >
             Show all topics
           </button>
+          <a href="/video-tutorials" className="htu-btn">
+            Video tutorials
+          </a>
           <a href="/" className="htu-btn htu-btn-primary">
             ← Back to Generator
           </a>

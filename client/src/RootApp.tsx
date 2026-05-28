@@ -13,6 +13,7 @@ const RefactoringAssistant = lazy(() => import("./pages/RefactoringAssistant"));
 const ProjectGenerator = lazy(() => import("./pages/ProjectGenerator"));
 const ProjectRepair = lazy(() => import("./pages/ProjectRepair"));
 const ExecutionReport = lazy(() => import("./pages/ExecutionReport"));
+const VideoTutorials = lazy(() => import("./pages/VideoTutorials"));
 
 function PageFallback({ label }: { label: string }) {
   return (
@@ -24,6 +25,22 @@ function PageFallback({ label }: { label: string }) {
 
 function RoutedContent({ pathname }: { pathname: string }) {
   const generatorTab = pathname === "/" ? readTabFromUrl() : null;
+
+  if (pathname === "/video-tutorials" || pathname.startsWith("/video-tutorials/")) {
+    return (
+      <PlatformShell
+        pathname={pathname}
+        navbar={{
+          title: "Video Tutorials",
+          subtitle: "Walkthroughs for every major feature",
+        }}
+      >
+        <Suspense fallback={<PageFallback label="Video Tutorials" />}>
+          <VideoTutorials />
+        </Suspense>
+      </PlatformShell>
+    );
+  }
 
   if (pathname === "/how-to-use" || pathname.startsWith("/how-to-use/")) {
     return (

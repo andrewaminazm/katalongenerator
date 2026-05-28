@@ -13,6 +13,10 @@ The main workspace has input tabs on the left (Manual, CSV, Jira, Gosi Brain Fai
 
 Open **Gosi Brain Workspace** from the header (/ai-workspace) for a conversational QA layer — generate scripts, analyze projects, and plan API/performance work in natural language.
 
+Under **Gosi Brain** in the sidebar, **Execution Report** (/execution-report) turns CI or nightly run totals into release-readiness intelligence and an optional executive PDF — no project upload required.
+
+**Video Tutorials** (/video-tutorials) under Utilities provides the same topics as short video lessons with links back here for written detail.
+
 This documentation center is independent of the generator UI. Bookmark /how-to-use or open it from the header **Documentation** button when onboarding new team members.`,
     steps: [
       "Confirm the backend is healthy (header badge shows API status).",
@@ -385,6 +389,65 @@ APIs: POST /api/workspace-memory/index, /search, /learn; GET /insights, /flows, 
     ],
   },
   {
+    id: "ai-execution-report",
+    title: "AI Execution Report Generator",
+    category: "intelligence",
+    summary:
+      "Turn pass/fail execution results into release readiness, module risk, charts, and an executive PDF for stakeholders.",
+    keywords: [
+      "execution report",
+      "pdf",
+      "release readiness",
+      "ci report",
+      "test results",
+      "build report",
+      "module risk",
+      "severity",
+      "executive summary",
+      "nightly",
+      "regression",
+    ],
+    content: `AI Execution Report Generator (/execution-report) is a standalone Gosi Brain tool for post-run reporting. You enter project metadata, build ID, environment, pass/fail/skip counts, duration, and optional failed-test rows — no Katalon project upload and no raw JSON required.
+
+The engine scores release readiness (READY / AT_RISK / BLOCKED), stability and risk, severity-weighted failures, module risk, business-flow impact, flaky patterns, root-cause groupings, and prioritized recommendations. Chart data powers pass/fail and severity visuals in the on-screen preview and PDF.
+
+**Generate report** returns full intelligence as JSON for review in the browser. **Download PDF** exports the same content as a formatted executive document (summary, charts, tables, recommendations). **Load sample data** fills the form with a demo run so you can explore the workflow before pasting real CI numbers.
+
+This complements the generator’s **Gosi Brain Failure Analyzer** tab (log paste → root cause on a single failure) and **Coverage / Refactor** tools (indexed project health). Use Execution Report when you already know run totals and want a release decision artifact for managers or release trains.`,
+    steps: [
+      "Open Gosi Brain → Execution Report from the sidebar (/execution-report).",
+      "Enter project name, build ID, execution date, environment, and test counts (total, passed, failed, skipped, duration).",
+      "Optional: add pipeline name, branch, and failure rows (test name, module, error, type, severity).",
+      "Click Load sample data to preview the workflow, or enter values from your CI/Katalon report.",
+      "Click Generate report and review pass rate, release status, module risk, flows, and recommendations on screen.",
+      "Click Download PDF to save a shareable executive report for stakeholders.",
+    ],
+    examples: [
+      "Nightly regression: 120 cases, 95 passed, 25 failed — two CRITICAL in Authentication and Payment → AT_RISK with module heatmap",
+      "Smoke on staging: all passed, zero failures → READY with high readiness score",
+    ],
+    tips: [
+      "Add failure rows with severity (CRITICAL/HIGH/MEDIUM/LOW) for accurate release blocking and module risk.",
+      "Pair with Failure Analyzer when you need line-level log diagnosis; use Execution Report for build-level release summaries.",
+      "Use consistent module names (Authentication, Checkout, Payment) so module risk rolls up cleanly.",
+    ],
+    warnings: [
+      "The tool analyzes the numbers you provide — it does not pull results automatically from Katalon Runtime or CI unless you enter them.",
+      "passed + failed + skipped should not exceed total test cases; invalid totals return a validation error.",
+      "If PDF download fails on a self-hosted server, confirm Chromium is installed for the API (npm run playwright:install in server/). Generate report still works without PDF.",
+    ],
+    mistakes: [
+      "Expecting the form to auto-import from an indexed project — upload is not required, but counts must be entered or loaded from sample.",
+      "Leaving failure rows empty on a failed build — release readiness will look healthier than reality.",
+      "Using Execution Report for single-test debugging — use Failure Analyzer with execution logs instead.",
+    ],
+    mediaPlaceholders: [
+      "Execution Report form with basic execution and failure table",
+      "On-screen preview with release status and severity breakdown",
+      "Downloaded PDF executive summary page",
+    ],
+  },
+  {
     id: "project-intelligence",
     title: "Project Intelligence (OR + Keywords + AI Memory)",
     category: "intelligence",
@@ -576,6 +639,35 @@ Keyword template mode can scaffold new keywords from step lists for later refine
     mediaPlaceholders: ["Code output dropdown options"],
   },
   {
+    id: "video-tutorials",
+    title: "Video Tutorials",
+    category: "utilities",
+    summary: "In-app video lessons for Script Generator, Gosi Brain, Intelligence, and Utilities.",
+    keywords: ["video", "tutorial", "youtube", "walkthrough", "training", "onboarding", "learn"],
+    content: `Video Tutorials (/video-tutorials) lives under **Utilities** in the sidebar. Each lesson maps to a product area — platform overview, Manual/API/Performance tabs, Failure Analyzer, Gosi Brain tools (Workspace, Coverage, Refactor, Execution Report, Project Generator, Repair), and Project Intelligence.
+
+Select a card to play the video in the built-in player. Use **Open feature** to navigate to the live tool, or **Read guide** to open the matching Documentation section. Lessons without a published recording show a coming-soon placeholder until an administrator adds a \`youtubeId\` in the catalog file.
+
+Built-in lessons ship as WebM files in \`client/public/tutorials/\` (regenerate with \`npm run tutorials:videos --prefix server\`). To use YouTube instead, set \`youtubeId\` in \`videoCatalog.ts\`.`,
+    steps: [
+      "Open Utilities → Video Tutorials from the sidebar.",
+      "Filter by category (Getting started, Script Generator, Gosi Brain, Intelligence, Utilities) or search by name.",
+      "Click a lesson card to load the player and description.",
+      "Use Open feature to practice in the app, or Read guide for step-by-step written instructions.",
+    ],
+    tips: [
+      "Pair videos with Documentation search when you need troubleshooting detail or copy-paste examples.",
+      "Assign onboarding paths: Getting started → Project Intelligence → Manual generation → Gosi Brain Workspace.",
+    ],
+    warnings: [
+      "Embedded videos require network access to YouTube or your hosted video URL — blocked corporate firewalls may prevent playback.",
+    ],
+    mistakes: [
+      "Expecting videos to replace Documentation — written guides include API details, warnings, and mistake lists not covered in recordings.",
+    ],
+    mediaPlaceholders: ["Video Tutorials grid with category filters and player panel"],
+  },
+  {
     id: "best-practices",
     title: "Best Practices",
     category: "advanced",
@@ -583,7 +675,7 @@ Keyword template mode can scaffold new keywords from step lists for later refine
     keywords: ["best practices", "ci", "maintainability", "flaky"],
     content: `Treat generated Groovy as a first draft — always review waits, assertions, and data. Keep one action per step, name OR objects consistently, and re-index projects after refactors.
 
-Combine Project Analyze risk scores with Gosi Brain Failure Analyzer on CI failures. Use Performance Smoke before full Stress on shared environments.`,
+Combine Project Analyze risk scores with Gosi Brain Failure Analyzer on CI failures. After a suite run, use **Execution Report** for release-readiness summaries and PDFs for stakeholders. Use Performance Smoke before full Stress on shared environments.`,
     steps: [
       "Version-control Katalon projects; upload after meaningful changes.",
       "Use Balanced generation mode for daily work; Strict for regulated reuse.",
@@ -620,6 +712,7 @@ PDF documentation download requires Chromium via Playwright on the server (npm r
     ],
     tips: [
       "Use Gosi Brain Failure Analyzer with Katalon logs for post-run debugging.",
+      "For Execution Report PDF errors, run npm run playwright:install in server/ on self-hosted backends; use Generate report if PDF is unavailable.",
     ],
     warnings: [
       "Gosi Brain optional — deterministic path works offline of LLM when configured.",
@@ -636,5 +729,6 @@ export const DOC_CATEGORIES: { id: DocSection["category"]; label: string }[] = [
   { id: "generation", label: "Generation" },
   { id: "integration", label: "Integrations" },
   { id: "intelligence", label: "Intelligence" },
+  { id: "utilities", label: "Utilities" },
   { id: "advanced", label: "Advanced" },
 ];

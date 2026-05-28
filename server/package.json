@@ -11,6 +11,7 @@
     "extract-locators": "tsx scripts/extract-playwright-locators.ts",
     "docs:pdf": "tsx scripts/generate-project-guide-pdf.ts",
     "docs:user-pdf": "tsx scripts/generate-project-guide-pdf.ts USER_GUIDE",
+    "tutorials:videos": "tsx scripts/generateTutorialVideos.ts",
     "test": "tsx --test src/services/testDsl/keywordCreateIntent.test.ts src/services/katalonCompiler/keywordTemplateGenerator.test.ts src/services/katalonCompiler/keywordFromTestSteps.test.ts src/services/katalonCompiler/forcedOutputFromSteps.test.ts src/services/groovyGenerator/groovyUtility.test.ts src/services/groovyArchitecture/groovyArchitecture.test.ts src/services/aiMemory/aiMemory.test.ts src/services/projectIntelligence/projectUrlResolver.test.ts src/services/projectIntelligence/semanticMatcher.test.ts src/services/failureAnalysis/failureAnalyzer.test.ts src/services/failureAnalysis/katalonExecutionLogAnalyzer.test.ts src/services/aiOrchestrator/aiOrchestrator.test.ts src/services/apiCodeGenerator/apiCodeGenerator.test.ts src/services/postmanGenerator/postmanGenerator.test.ts src/services/apiArchitect/apiArchitect.test.ts src/services/performanceEngine/performanceEngine.test.ts src/services/projectIntelligenceV2/projectIntelligenceV2.test.ts"
   },
   "dependencies": {

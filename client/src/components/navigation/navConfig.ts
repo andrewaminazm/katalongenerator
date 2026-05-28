@@ -14,6 +14,7 @@ import {
   Zap,
   Hammer,
   FileBarChart,
+  PlayCircle,
 } from "lucide-react";
 
 export type NavItem = {
@@ -73,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "utilities",
     label: "Utilities",
     items: [
+      { id: "video-tutorials", label: "Video Tutorials", href: "/video-tutorials", icon: PlayCircle },
       { id: "docs", label: "Documentation", href: "/how-to-use", icon: BookOpen },
       { id: "history", label: "Generation History", href: "/#history", icon: History },
     ],
@@ -99,4 +101,10 @@ export const COMMAND_ACTIONS: CommandAction[] = [
   { id: "api-suite", label: "Create API regression suite", keywords: ["api", "postman", "swagger"], generatorTab: "api" },
   { id: "perf-smoke", label: "Create performance smoke suite", keywords: ["k6", "jmeter", "load", "performance"], generatorTab: "performance" },
   { id: "docs", label: "Open Documentation", keywords: ["help", "guide", "how to"], href: "/how-to-use" },
+  {
+    id: "video-tutorials",
+    label: "Open Video Tutorials",
+    keywords: ["video", "tutorial", "walkthrough", "youtube", "learn"],
+    href: "/video-tutorials",
+  },
 ];

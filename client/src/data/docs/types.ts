@@ -3,6 +3,7 @@ export type DocCategory =
   | "generation"
   | "integration"
   | "intelligence"
+  | "utilities"
   | "advanced";
 
 export type DocSection = {

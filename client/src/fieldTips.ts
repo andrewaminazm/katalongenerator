@@ -14,7 +14,9 @@ export const TIPS = {
     "Performance Test — generate JMeter (.jmx) and k6 load scripts from the same API definitions with smoke, baseline, stress, spike, and soak models.",
 
   headerDocumentation:
-    "Open the in-app Documentation center — guides for Manual, API Test, Performance, Project Intelligence, imports, and troubleshooting. Includes search and step-by-step workflows.",
+    "Open the in-app Documentation center — guides for Manual, API Test, Performance, Project Intelligence, Execution Report, imports, and troubleshooting. Includes search and step-by-step workflows.",
+  headerVideoTutorials:
+    "Open Video Tutorials — walkthrough videos for Script Generator, Gosi Brain, Intelligence, and Utilities. Each lesson links to the live feature and written documentation.",
   headerAiWorkspace:
     "Open Gosi Brain QA Workspace — chat naturally to generate Groovy, API suites, load strategies, run Project Analyze, or get locator and architecture advice. Uses your active project and optional Swagger/Postman context.",
   headerCoverage:
