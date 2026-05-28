@@ -62,6 +62,7 @@ export function ExecutionReportForm({ form, onChange, disabled }: Props) {
           <label>
             Environment
             <select value={form.environment} onChange={(e) => set({ environment: e.target.value })}>
+              <option value="">— Select —</option>
               {ENV_OPTIONS.map((env) => (
                 <option key={env} value={env}>
                   {env}

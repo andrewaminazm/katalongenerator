@@ -22,25 +22,29 @@ export default function ExecutionReport() {
   const [form, setForm] = useState<ExecutionFormState>(DEFAULT_FORM_STATE);
   const [report, setReport] = useState<ExecutionReportOutput | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingSample, setLoadingSample] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadSample = useCallback(async () => {
     setError(null);
+    setLoadingSample(true);
     try {
       const sample = await fetchExecutionReportSample();
       setForm(formStateFromSample(sample));
+      setReport(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load sample");
+    } finally {
+      setLoadingSample(false);
     }
   }, []);
 
   useEffect(() => {
     document.title = "Execution Report — Katalon Script Generator";
-    void loadSample();
     return () => {
       document.title = "Katalon Script Generator";
     };
-  }, [loadSample]);
+  }, []);
 
   const runGenerate = async () => {
     setLoading(true);
@@ -89,20 +93,28 @@ export default function ExecutionReport() {
 
       <PageInfoGuide title="How this works">
         <ul>
-          <li>Fill in project, build, pass/fail counts, and optional failure rows in the table.</li>
           <li>
-            <strong>Generate report</strong> produces release readiness, module risk, and chart data.
+            Enter project, build, pass/fail counts, and optional failure rows — or use{" "}
+            <strong>Load sample data</strong> to explore the workflow.
           </li>
           <li>
-            <strong>Download PDF</strong> exports a Katalon Execution Intelligence Report (server needs
-            Playwright).
+            <strong>Generate report</strong> returns release readiness, module risk scores, trend charts, and
+            executive insights as JSON you can review on screen.
+          </li>
+          <li>
+            <strong>Download PDF</strong> saves the same report as a shareable document.
           </li>
         </ul>
       </PageInfoGuide>
 
       <div className="er-toolbar">
-        <button type="button" className="er-btn" onClick={() => void loadSample()} disabled={loading}>
-          Load sample data
+        <button
+          type="button"
+          className="er-btn"
+          onClick={() => void loadSample()}
+          disabled={loading || loadingSample}
+        >
+          {loadingSample ? "Loading sample…" : "Load sample data"}
         </button>
         <button type="button" className="er-btn er-btn-primary" onClick={() => void runGenerate()} disabled={loading}>
           {loading ? "Working…" : "Generate report"}
