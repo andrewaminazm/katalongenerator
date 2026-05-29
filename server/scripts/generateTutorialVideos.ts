@@ -1,199 +1,62 @@
 /**
- * Generates hosted tutorial WebM files for Utilities → Video Tutorials.
- * Run: npm run tutorials:videos --prefix server
- * Requires: npm run playwright:install --prefix server
+ * Generates tutorial WebM files for Utilities → Video Tutorials.
+ *
+ * Default: real UI screen capture (Playwright records the live app).
+ *   npm run tutorials:videos --prefix server
+ *   Uses TUTORIAL_BASE_URL or starts vite preview after building client.
+ *
+ * Slides-only (text animations, no app UI):
+ *   npm run tutorials:videos --prefix server -- --mode=slides
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { execSync } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { getPlaywrightLaunchOptions } from "../src/services/playwrightLaunch.js";
+import { TUTORIALS, type TutorialSpec } from "./tutorialCatalog.js";
+import {
+  buildClient,
+  ensureDevStack,
+  recordAppTutorial,
+  startVitePreview,
+  waitForHttp,
+} from "./tutorialAppCapture.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../..");
 const OUT_DIR = path.join(REPO_ROOT, "client", "public", "tutorials");
 const TEMP_DIR = path.join(OUT_DIR, ".render-temp");
+const DURATIONS_JSON = path.join(REPO_ROOT, "client", "src", "data", "tutorials", "tutorialDurations.json");
 
-type TutorialSpec = {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  slides: string[];
-};
+function probeVideoDurationSec(filePath: string): number {
+  try {
+    const out = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath.replace(/"/g, '\\"')}"`,
+      { encoding: "utf8" }
+    );
+    const sec = Math.round(parseFloat(out.trim()));
+    return Number.isFinite(sec) && sec > 0 ? sec : 0;
+  } catch {
+    return 0;
+  }
+}
 
-/** Keep in sync with client/src/data/tutorials/videoCatalog.ts */
-const TUTORIALS: TutorialSpec[] = [
-  {
-    id: "platform-overview",
-    title: "Platform overview",
-    description:
-      "Tour the generator layout, API health, project upload, and where Script Generator, Gosi Brain, and Utilities live.",
-    category: "Getting started",
-    slides: [
-      "Script Generator tabs: Functional, API, Performance, Failure Analyzer",
-      "Gosi Brain: Workspace, Coverage, Refactor, Execution Report, Project tools",
-      "Intelligence: Project upload, OR/keywords index, Gosi Brain Memory",
-      "Utilities: Video Tutorials, Documentation, Generation History",
-    ],
-  },
-  {
-    id: "manual-generation",
-    title: "Manual test generation (WebUI)",
-    description: "Plain-language steps to Katalon Groovy with locators and code output modes.",
-    category: "Script Generator",
-    slides: [
-      "One action per line: visit, click, type, use keyword",
-      "Add locators or Page URL for auto-detect on Generate",
-      "Set Active project to reuse Object Repository names",
-      "Choose Code output and click Generate Katalon Groovy",
-    ],
-  },
-  {
-    id: "api-automation",
-    title: "API Test tab",
-    description: "Swagger, Postman, and cURL to Katalon API keywords and test scripts.",
-    category: "Script Generator",
-    slides: [
-      "Paste OpenAPI, Postman JSON, or cURL snippets",
-      "Review semantic folders and chained variables",
-      "Export Keywords and Scripts for Katalon Studio",
-      "Optional Postman collection for dual-stack QA",
-    ],
-  },
-  {
-    id: "performance-testing",
-    title: "Performance Test tab",
-    description: "JMeter and k6 load scripts from the same API definitions.",
-    category: "Script Generator",
-    slides: [
-      "Reuse API input from Swagger or Postman",
-      "Pick Smoke, Baseline, Stress, Spike, or Soak",
-      "Download .jmx, k6 .js, or Full Suite + strategy",
-      "Run locally with JMeter or k6 CLI",
-    ],
-  },
-  {
-    id: "failure-analyzer",
-    title: "Gosi Brain Failure Analyzer",
-    description: "Paste execution logs for root cause and fix recommendations.",
-    category: "Script Generator",
-    slides: [
-      "Open Failure Analyzer tab on the generator",
-      "Paste Katalon Studio execution log text",
-      "Review classification, flakiness, and root cause",
-      "Apply suggested fixes in Studio or CI",
-    ],
-  },
-  {
-    id: "ai-workspace",
-    title: "Gosi Brain QA Workspace",
-    description: "Chat-first QA with intent routing and project-aware agents.",
-    category: "Gosi Brain",
-    slides: [
-      "Select Active project and memory mode in Context",
-      "Attach Swagger or Postman for API questions",
-      "Ask in natural language — agents route by intent",
-      "Copy Groovy, reports, or follow suggestion chips",
-    ],
-  },
-  {
-    id: "coverage-analyzer",
-    title: "AI Coverage Analyzer",
-    description: "Coverage gaps, heatmaps, and recommendations for indexed projects.",
-    category: "Gosi Brain",
-    slides: [
-      "Upload and index a Katalon project first",
-      "Run Analyze coverage on /coverage",
-      "Review module heatmap and risk score",
-      "Optional OpenAPI paste for API gap analysis",
-    ],
-  },
-  {
-    id: "refactoring-assistant",
-    title: "AI Refactoring Assistant",
-    description: "Maintainability, duplication, and architecture recommendations.",
-    category: "Gosi Brain",
-    slides: [
-      "Open Refactoring Assistant from Gosi Brain",
-      "Run Analyze framework on indexed project",
-      "Prioritize recommendations with impact scores",
-      "Apply changes manually in Katalon Studio",
-    ],
-  },
-  {
-    id: "execution-report",
-    title: "AI Execution Report Generator",
-    description: "Release readiness and executive PDF from CI pass/fail data.",
-    category: "Gosi Brain",
-    slides: [
-      "Enter build ID, counts, and optional failure rows",
-      "Generate report for readiness and module risk",
-      "Review charts and recommendations on screen",
-      "Download PDF for stakeholders",
-    ],
-  },
-  {
-    id: "project-generator",
-    title: "AI Katalon Project Generator",
-    description: "Enterprise project scaffold with OR, keywords, and suites.",
-    category: "Gosi Brain",
-    slides: [
-      "Set framework type, pattern, and business flows",
-      "Optional source project for style reuse",
-      "Analyze architecture preview",
-      "Generate and download importable zip",
-    ],
-  },
-  {
-    id: "project-repair",
-    title: "AI Project Repair Engine",
-    description: "Safe repairs with previews and downloadable archive.",
-    category: "Gosi Brain",
-    slides: [
-      "Analyze indexed project for flakiness and smells",
-      "Preview repair diffs before applying",
-      "Apply safe repairs conservatively",
-      "Download repaired zip for Studio import",
-    ],
-  },
-  {
-    id: "project-intelligence",
-    title: "Project Intelligence",
-    description: "Upload, index, analyze, and heal your Katalon project.",
-    category: "Intelligence",
-    slides: [
-      "Upload Katalon .zip or .rar archive",
-      "Wait for OR, keyword, and script indexing",
-      "Set Active project and generation mode",
-      "Run Project Analyze and heal locators",
-    ],
-  },
-  {
-    id: "workspace-memory",
-    title: "AI QA Workspace Memory",
-    description: "Persistent flows and architecture injected into chat.",
-    category: "Intelligence",
-    slides: [
-      "Index memory after project upload or repair",
-      "Re-index after major project changes",
-      "Ask about flows, locators, and risk in Workspace",
-      "Review citation chips on assistant replies",
-    ],
-  },
-  {
-    id: "documentation-center",
-    title: "Documentation center",
-    description: "Searchable guides, workflows, and troubleshooting.",
-    category: "Utilities",
-    slides: [
-      "Open Documentation under Utilities",
-      "Search by feature or keyword",
-      "Follow step workflows and tips",
-      "Use Video Tutorials for visual walkthroughs",
-    ],
-  },
-];
+async function syncDurationManifest(ids: string[]): Promise<void> {
+  let existing: Record<string, number> = {};
+  try {
+    existing = JSON.parse(await readFile(DURATIONS_JSON, "utf8")) as Record<string, number>;
+  } catch {
+    /* new file */
+  }
+  for (const id of ids) {
+    const file = path.join(OUT_DIR, `${id}.webm`);
+    const sec = probeVideoDurationSec(file);
+    if (sec > 0) existing[id] = sec;
+  }
+  await writeFile(DURATIONS_JSON, `${JSON.stringify(existing, null, 2)}\n`, "utf8");
+  console.log(`Updated duration labels → ${DURATIONS_JSON}`);
+}
 
 const SLIDE_MS = 4200;
 const INTRO_MS = 5000;
@@ -214,7 +77,6 @@ function buildTutorialHtml(t: TutorialSpec): string {
     <section class="slide" data-ms="${SLIDE_MS}">
       <p class="step-label">Step ${i + 1}</p>
       <p class="step-text">${escapeHtml(text)}</p>
-      <p class="brand">Katalon Script Generator · Gosi Brain QA</p>
     </section>`
     )
     .join("");
@@ -228,123 +90,26 @@ function buildTutorialHtml(t: TutorialSpec): string {
   <title>${escapeHtml(t.title)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: "Segoe UI", system-ui, sans-serif;
-      background: #0c1218;
-      color: #e8eaed;
-      overflow: hidden;
-      width: 1280px;
-      height: 720px;
-    }
-    .deck { position: relative; width: 1280px; height: 720px; }
-    .slide {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 4rem 5rem;
-      opacity: 0;
-      transition: opacity 0.55s ease, transform 0.55s ease;
-      transform: translateY(10px);
-      pointer-events: none;
-    }
-    .slide.active {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    .badge {
-      display: inline-block;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #5eead4;
-      background: rgba(13, 110, 110, 0.25);
-      border: 1px solid rgba(13, 110, 110, 0.5);
-      padding: 0.35rem 0.75rem;
-      border-radius: 999px;
-      margin-bottom: 1.25rem;
-      width: fit-content;
-    }
-    h1 {
-      font-size: 2.35rem;
-      font-weight: 700;
-      line-height: 1.15;
-      margin-bottom: 1rem;
-      max-width: 900px;
-    }
-    .desc {
-      font-size: 1.2rem;
-      color: #9ca3af;
-      line-height: 1.5;
-      max-width: 820px;
-    }
-    .step-label {
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: #5eead4;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 0.75rem;
-    }
-    .step-text {
-      font-size: 1.85rem;
-      font-weight: 600;
-      line-height: 1.35;
-      max-width: 900px;
-    }
-    .brand {
-      position: absolute;
-      bottom: 2rem;
-      left: 5rem;
-      font-size: 0.8rem;
-      color: #6b7280;
-    }
-    .progress {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      height: 4px;
-      width: 0;
-      background: linear-gradient(90deg, #0d6e6e, #5eead4);
-      transition: width 0.4s linear;
-      z-index: 2;
-    }
-    .outro-title { font-size: 1.75rem; margin-bottom: 0.5rem; font-weight: 700; }
-    .outro-sub { color: #9ca3af; font-size: 1.1rem; max-width: 700px; line-height: 1.45; }
+    body { font-family: system-ui, sans-serif; background: #0c1218; color: #e8eaed; width: 1280px; height: 720px; overflow: hidden; }
+    .slide { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 4rem 5rem; opacity: 0; transition: opacity 0.55s ease; }
+    .slide.active { opacity: 1; }
+    h1 { font-size: 2.35rem; margin-bottom: 1rem; }
+    .desc { font-size: 1.2rem; color: #9ca3af; }
   </style>
 </head>
 <body>
-  <div class="deck">
-    <div class="progress" id="progress"></div>
-    <section class="slide" data-ms="${INTRO_MS}">
-      <span class="badge">${escapeHtml(t.category)}</span>
-      <h1>${escapeHtml(t.title)}</h1>
-      <p class="desc">${escapeHtml(t.description)}</p>
-      <p class="brand">Katalon Script Generator · Gosi Brain QA</p>
-    </section>
-    ${stepSlides}
-    <section class="slide" data-ms="${OUTRO_MS}">
-      <span class="badge">Next step</span>
-      <p class="outro-title">Try it in the app</p>
-      <p class="outro-sub">Open the feature from the sidebar and follow the written guide in Documentation.</p>
-      <p class="brand">Utilities → Video Tutorials</p>
-    </section>
-  </div>
+  <section class="slide" data-ms="${INTRO_MS}"><h1>${escapeHtml(t.title)}</h1><p class="desc">${escapeHtml(t.description)}</p></section>
+  ${stepSlides}
   <script>
     const slides = Array.from(document.querySelectorAll(".slide"));
-    const progress = document.getElementById("progress");
-    let index = 0;
-    function showSlide() {
-      slides.forEach((s, i) => s.classList.toggle("active", i === index));
-      if (progress) progress.style.width = ((index + 1) / slides.length * 100) + "%";
-      const ms = Number(slides[index]?.dataset.ms || ${SLIDE_MS});
-      index += 1;
-      if (index < slides.length) setTimeout(showSlide, ms);
+    let i = 0;
+    function next() {
+      slides.forEach((s, j) => s.classList.toggle("active", j === i));
+      const ms = Number(slides[i]?.dataset.ms || ${SLIDE_MS});
+      i++;
+      if (i < slides.length) setTimeout(next, ms);
     }
-    setTimeout(showSlide, 400);
-    window.__TOTAL_MS__ = ${totalMs};
+    setTimeout(next, 400);
   </script>
 </body>
 </html>`;
@@ -354,7 +119,7 @@ function recordingDurationMs(t: TutorialSpec): number {
   return INTRO_MS + t.slides.length * SLIDE_MS + OUTRO_MS + 1500;
 }
 
-async function recordTutorial(t: TutorialSpec): Promise<string> {
+async function recordSlideTutorial(t: TutorialSpec): Promise<string> {
   const html = buildTutorialHtml(t);
   const htmlPath = path.join(TEMP_DIR, `${t.id}.html`);
   await writeFile(htmlPath, html, "utf8");
@@ -365,10 +130,7 @@ async function recordTutorial(t: TutorialSpec): Promise<string> {
   try {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
-      recordVideo: {
-        dir: TEMP_DIR,
-        size: { width: 1280, height: 720 },
-      },
+      recordVideo: { dir: TEMP_DIR, size: { width: 1280, height: 720 } },
     });
     const page = await context.newPage();
     await page.goto(pathToFileURL(htmlPath).href, { waitUntil: "load" });
@@ -383,8 +145,54 @@ async function recordTutorial(t: TutorialSpec): Promise<string> {
   }
 }
 
+function parseMode(): "app" | "slides" {
+  const flag = process.argv.find((a) => a.startsWith("--mode="))?.slice(7);
+  return flag === "slides" ? "slides" : "app";
+}
+
+async function resolveBaseUrl(): Promise<{ baseUrl: string; cleanup: () => void }> {
+  const envUrl = process.env.TUTORIAL_BASE_URL?.trim()?.replace(/\/$/, "");
+  if (envUrl) {
+    await waitForHttp(envUrl);
+    console.log(`Using app at ${envUrl}`);
+    return { baseUrl: envUrl, cleanup: () => undefined };
+  }
+
+  try {
+    await waitForHttp("http://127.0.0.1:5173", 5_000);
+    await waitForHttp("http://127.0.0.1:8787/api/health", 5_000);
+    console.log("Using existing dev stack at http://127.0.0.1:5173");
+    return { baseUrl: "http://127.0.0.1:5173", cleanup: () => undefined };
+  } catch {
+    /* start stack */
+  }
+
+  if (process.argv.includes("--preview")) {
+    buildClient();
+    const stop = await startVitePreview();
+    console.log("Using vite preview at http://127.0.0.1:4173 (API actions may be limited)");
+    return { baseUrl: "http://127.0.0.1:4173", cleanup: stop };
+  }
+
+  return ensureDevStack();
+}
+
 async function main() {
   const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7);
+
+  if (process.argv.includes("--sync-durations")) {
+    const ids = only ? TUTORIALS.filter((t) => t.id === only).map((t) => t.id) : TUTORIALS.map((t) => t.id);
+    if (only && ids.length === 0) {
+      console.error(`Unknown tutorial id: ${only}`);
+      process.exit(1);
+    }
+    await mkdir(OUT_DIR, { recursive: true });
+    await syncDurationManifest(ids);
+    console.log("Done.");
+    return;
+  }
+
+  const mode = parseMode();
   const list = only ? TUTORIALS.filter((t) => t.id === only) : TUTORIALS;
   if (only && list.length === 0) {
     console.error(`Unknown tutorial id: ${only}`);
@@ -394,18 +202,46 @@ async function main() {
   await mkdir(OUT_DIR, { recursive: true });
   await mkdir(TEMP_DIR, { recursive: true });
 
+  let cleanup: () => void = () => undefined;
+  let baseUrl = "";
+
+  if (mode === "app") {
+    const resolved = await resolveBaseUrl();
+    baseUrl = resolved.baseUrl;
+    cleanup = resolved.cleanup;
+    console.log(`UI capture mode — recording from ${baseUrl}`);
+  } else {
+    console.log("Slides mode — animated text only (no app screenshots)");
+  }
+
   console.log(`Generating ${list.length} tutorial video(s) → ${OUT_DIR}`);
 
-  for (const t of list) {
-    process.stdout.write(`  · ${t.id} … `);
-    try {
-      const out = await recordTutorial(t);
-      console.log(`OK (${out})`);
-    } catch (e) {
-      console.log("FAILED");
-      console.error(e);
-      process.exitCode = 1;
+  const generatedIds: string[] = [];
+
+  try {
+    for (const t of list) {
+      process.stdout.write(`  · ${t.id} … `);
+      try {
+        const outPath = path.join(OUT_DIR, `${t.id}.webm`);
+        if (mode === "app") {
+          await recordAppTutorial(baseUrl, t, outPath, TEMP_DIR);
+        } else {
+          await recordSlideTutorial(t);
+        }
+        console.log(`OK (${outPath})`);
+        generatedIds.push(t.id);
+      } catch (e) {
+        console.log("FAILED");
+        console.error(e);
+        process.exitCode = 1;
+      }
     }
+  } finally {
+    cleanup();
+  }
+
+  if (generatedIds.length > 0) {
+    await syncDurationManifest(generatedIds);
   }
 
   console.log("Done.");

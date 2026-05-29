@@ -96,7 +96,10 @@ export default function VideoTutorials() {
 
       <PageInfoGuide title="How this works">
         <ul>
-          <li>Click any <strong>feature name</strong> in the list to play its video in the main player.</li>
+          <li>
+            Click any <strong>feature name</strong> in the list to play its step-by-step demo in the main
+            player — each lesson shows real UI actions (typing steps, clicking Generate, loading samples, etc.).
+          </li>
           <li>Filter by category or search to narrow the list.</li>
           <li>
             Use <strong>Open feature</strong> or <strong>Read guide</strong> under the player for next
@@ -154,6 +157,9 @@ export default function VideoTutorials() {
             >
               <p className="vt-now-playing">
                 Now playing · <strong>{selected.title}</strong>
+                {selected.durationLabel ? (
+                  <span className="vt-now-playing-duration"> · {selected.durationLabel}</span>
+                ) : null}
               </p>
               <VideoEmbed key={selected.id} video={selected} autoPlayOnChange />
               <div className="vt-player-meta">

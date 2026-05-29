@@ -41,6 +41,7 @@ export function VideoEmbed({ video, title, autoPlayOnChange = true }: Props) {
 
   if (src) {
     const isWebm = src.endsWith(".webm");
+    const srcWithId = `${src}${src.includes("?") ? "&" : "?"}feature=${encodeURIComponent(video.id)}`;
     return (
       <div className="vt-embed" key={`file-${video.id}`}>
         <video
@@ -51,7 +52,7 @@ export function VideoEmbed({ video, title, autoPlayOnChange = true }: Props) {
           preload="auto"
           title={label}
         >
-          <source src={src} type={isWebm ? "video/webm" : undefined} />
+          <source src={srcWithId} type={isWebm ? "video/webm" : undefined} />
           Your browser does not support embedded video.
         </video>
       </div>

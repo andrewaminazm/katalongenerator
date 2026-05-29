@@ -195,6 +195,11 @@
   color: var(--text);
 }
 
+.vt-now-playing-duration {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .vt-player-meta h2 {
   margin: 0 0 0.5rem;
   font-size: var(--text-medium);

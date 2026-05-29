@@ -2,10 +2,13 @@
  * Video tutorial catalog for Utilities → Video Tutorials (/video-tutorials).
  *
  * Hosted videos live in `client/public/tutorials/{id}.webm`.
- * Regenerate: `npm run tutorials:videos --prefix server`
+ * Regenerate (real UI screen capture): `npm run tutorials:videos --prefix server`
+ * Duration labels sync from `tutorialDurations.json` after each generate run.
  *
  * Optional: set `youtubeId` instead of / in addition to `videoUrl` for YouTube hosting.
  */
+
+import { tutorialDurationLabel } from "./durationLabels";
 
 export type VideoTutorialCategory =
   | "getting-started"
@@ -41,14 +44,13 @@ export const VIDEO_TUTORIAL_CATEGORIES: { id: VideoTutorialCategory; label: stri
   { id: "utilities", label: "Utilities" },
 ];
 
-export const VIDEO_TUTORIALS: VideoTutorial[] = [
+const VIDEO_TUTORIAL_DEFINITIONS: Omit<VideoTutorial, "durationLabel">[] = [
   {
     id: "platform-overview",
     title: "Platform overview",
     description:
       "Tour the generator layout, API health, project upload, and where Script Generator, Gosi Brain, and Utilities live in the sidebar.",
     category: "getting-started",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("platform-overview"),
     docSectionId: "getting-started",
     relatedHref: "/",
@@ -59,7 +61,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Write plain-language steps, add locators or Page URL auto-detect, choose code output, and generate Katalon Groovy.",
     category: "script-generator",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("manual-generation"),
     docSectionId: "manual-test-generation",
     relatedHref: "/?tab=manual",
@@ -70,7 +71,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Import Swagger, Postman, or cURL and export Katalon API keywords, test scripts, and Postman collections.",
     category: "script-generator",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("api-automation"),
     docSectionId: "api-automation",
     relatedHref: "/?tab=api",
@@ -81,7 +81,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Generate JMeter and k6 load scripts with smoke, stress, spike, and soak strategies from the same API definitions.",
     category: "script-generator",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("performance-testing"),
     docSectionId: "performance-testing",
     relatedHref: "/?tab=performance",
@@ -92,7 +91,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Paste Katalon execution logs to infer root cause, flakiness signals, and fix recommendations without screenshots.",
     category: "script-generator",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("failure-analyzer"),
     relatedHref: "/?tab=failure",
   },
@@ -102,7 +100,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Chat-first QA: intent routing, project context, Swagger/Postman attachments, and multi-agent responses.",
     category: "gosi-brain",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("ai-workspace"),
     docSectionId: "ai-qa-workspace",
     relatedHref: "/ai-workspace",
@@ -113,7 +110,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "SonarQube-style coverage gaps, module heatmaps, API spec coverage, and Gosi Brain recommendations.",
     category: "gosi-brain",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("coverage-analyzer"),
     docSectionId: "ai-coverage-analyzer",
     relatedHref: "/coverage",
@@ -124,7 +120,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Maintainability scores, duplicate flows, OR/keyword health, and prioritized refactoring guidance.",
     category: "gosi-brain",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("refactoring-assistant"),
     docSectionId: "ai-refactoring-assistant",
     relatedHref: "/refactor",
@@ -135,7 +130,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Turn CI pass/fail totals into release readiness, module risk, charts, and an executive PDF.",
     category: "gosi-brain",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("execution-report"),
     docSectionId: "ai-execution-report",
     relatedHref: "/execution-report",
@@ -146,7 +140,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Scaffold enterprise project structure, OR, keywords, suites, and framework health in a downloadable zip.",
     category: "gosi-brain",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("project-generator"),
     docSectionId: "ai-project-generator",
     relatedHref: "/project-generator",
@@ -157,7 +150,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Analyze flaky scripts, preview safe repairs, and download a repaired project archive.",
     category: "gosi-brain",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("project-repair"),
     docSectionId: "ai-project-repair-engine",
     relatedHref: "/project-repair",
@@ -168,7 +160,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Upload a Katalon archive, index OR and keywords, run Project Analyze, heal locators, and enable AI memory.",
     category: "intelligence",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("project-intelligence"),
     docSectionId: "project-intelligence",
     relatedHref: "/#project-intelligence",
@@ -179,7 +170,6 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Index flows, repairs, and architecture into persistent memory injected into workspace chat.",
     category: "intelligence",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("workspace-memory"),
     docSectionId: "ai-workspace-memory",
     relatedHref: "/ai-workspace",
@@ -190,12 +180,16 @@ export const VIDEO_TUTORIALS: VideoTutorial[] = [
     description:
       "Search guides, step workflows, tips, and troubleshooting — including links from each product area.",
     category: "utilities",
-    durationLabel: "~1 min",
     videoUrl: tutorialVideoUrl("documentation-center"),
     docSectionId: "video-tutorials",
     relatedHref: "/how-to-use",
   },
 ];
+
+export const VIDEO_TUTORIALS: VideoTutorial[] = VIDEO_TUTORIAL_DEFINITIONS.map((t) => ({
+  ...t,
+  durationLabel: tutorialDurationLabel(t.id),
+}));
 
 export function getVideoTutorialById(id: string): VideoTutorial | undefined {
   return VIDEO_TUTORIALS.find((v) => v.id === id);

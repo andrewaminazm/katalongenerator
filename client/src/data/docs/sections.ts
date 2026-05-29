@@ -648,7 +648,7 @@ Keyword template mode can scaffold new keywords from step lists for later refine
 
 Select a card to play the video in the built-in player. Use **Open feature** to navigate to the live tool, or **Read guide** to open the matching Documentation section. Lessons without a published recording show a coming-soon placeholder until an administrator adds a \`youtubeId\` in the catalog file.
 
-Built-in lessons ship as WebM files in \`client/public/tutorials/\` (regenerate with \`npm run tutorials:videos --prefix server\`). To use YouTube instead, set \`youtubeId\` in \`videoCatalog.ts\`.`,
+Built-in lessons are WebM screen recordings of the real app UI in \`client/public/tutorials/\` (regenerate with \`npm run tutorials:videos --prefix server\`, which builds the client and captures each feature route). To use YouTube instead, set \`youtubeId\` in \`videoCatalog.ts\`.`,
     steps: [
       "Open Utilities → Video Tutorials from the sidebar.",
       "Filter by category (Getting started, Script Generator, Gosi Brain, Intelligence, Utilities) or search by name.",
