@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { SENIOR_QA_ENGINEER_DISPLAY } from "./data/seniorQaEngineer";
 import { PlatformShell } from "./components/layout/PlatformShell";
 import { readTabFromUrl } from "./hooks/useGeneratorTabUrl";
 import GeneratorPage from "./pages/GeneratorPage";
@@ -62,12 +63,13 @@ function RoutedContent({ pathname }: { pathname: string }) {
     return (
       <PlatformShell
         pathname={pathname}
+        mainClassName="min-h-0 flex-1 overflow-hidden"
         navbar={{
-          title: "Gosi Brain QA Workspace",
-          subtitle: "Conversational QA engineering",
+          title: "Test Architect Chat",
+          subtitle: `${SENIOR_QA_ENGINEER_DISPLAY} — your new QA teammate`,
         }}
       >
-        <Suspense fallback={<PageFallback label="AI Workspace" />}>
+        <Suspense fallback={<PageFallback label="Test Architect Chat" />}>
           <AIWorkspace />
         </Suspense>
       </PlatformShell>

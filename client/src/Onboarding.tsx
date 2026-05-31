@@ -277,7 +277,7 @@ export function HelpMenu({ onOpenWizard }: HelpMenuProps) {
                 setHelpTopic("aiWorkspace");
               }}
             >
-              Gosi Brain QA Workspace
+              Test Architect Chat
             </button>
             <button
               type="button"

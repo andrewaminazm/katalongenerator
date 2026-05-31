@@ -4,6 +4,7 @@
   justify-content: flex-end;
   gap: 0.5rem;
   padding: 0.5rem 1rem 0;
+  flex-shrink: 0;
 }
 
 .aiw-root--embedded {
@@ -214,15 +215,17 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .aiw-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 1.25rem 0.5rem;
+  padding: 1rem 1.25rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  scroll-padding-bottom: 1.5rem;
 }
 
 .aiw-composer {
@@ -404,7 +407,7 @@
 
 .aiw-asset pre {
   margin: 0;
-  max-height: 240px;
+  max-height: min(60vh, 520px);
   overflow: auto;
 }
 
@@ -418,4 +421,106 @@
 .aiw-link {
   text-decoration: none;
   color: inherit;
+}
+
+.aiw-gen-examples {
+  padding: 0.75rem 1.25rem 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.aiw-gen-examples-header {
+  margin-bottom: 1rem;
+}
+
+.aiw-gen-examples-title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-heading);
+  font-size: var(--text-medium);
+  font-weight: 600;
+}
+
+.aiw-gen-examples-intro {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.aiw-gen-example-section {
+  margin-bottom: 1.1rem;
+}
+
+.aiw-gen-example-section-head {
+  margin-bottom: 0.45rem;
+}
+
+.aiw-gen-example-section-title {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.aiw-gen-example-section-desc {
+  margin: 0.15rem 0 0;
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.aiw-gen-examples-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.45rem;
+}
+
+.aiw-gen-example-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.aiw-gen-example-card:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.aiw-gen-example-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.aiw-gen-example-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+}
+
+.aiw-gen-example-preview {
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.aiw-gen-example-hint {
+  font-size: 0.62rem;
+  color: var(--accent, #2563eb);
+  opacity: 0.85;
+  line-height: 1.3;
 }

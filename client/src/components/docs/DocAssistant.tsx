@@ -4,7 +4,7 @@ import { getSectionById } from "../../data/docs/search";
 
 const QUICK_QUESTIONS = [
   { q: "How do I upload a project?", search: "project upload" },
-  { q: "How does Gosi Brain Workspace work?", search: "ai qa workspace" },
+  { q: "How does Test Architect Chat work?", search: "test architect chat ai workspace" },
   { q: "How does locator healing work?", search: "locator healing" },
   { q: "Why did generation fail?", search: "troubleshooting generate" },
   { q: "How do I run performance tests?", search: "jmeter k6" },

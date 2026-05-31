@@ -18,7 +18,7 @@ export const TIPS = {
   headerVideoTutorials:
     "Open Video Tutorials — walkthrough videos for Script Generator, Gosi Brain, Intelligence, and Utilities. Each lesson links to the live feature and written documentation.",
   headerAiWorkspace:
-    "Open Gosi Brain QA Workspace — chat naturally to generate Groovy, API suites, load strategies, run Project Analyze, or get locator and architecture advice. Uses your active project and optional Swagger/Postman context.",
+    "Open Test Architect Chat — chat with a Senior Automation QA Engineer for failure analysis, script review, test design, and project health. Advisory only; uses active project and optional Swagger/Postman context.",
   headerCoverage:
     "Open Gosi Brain Coverage Analyzer — SonarQube-style coverage intelligence: gaps, weak assertions, OR/keyword health, API coverage, business flows, and risk heatmaps for indexed Katalon projects.",
   headerRefactor:
@@ -115,12 +115,12 @@ export const FLOW_STEPS = [
   "For failed runs: open Gosi Brain Failure Analyzer tab and paste Katalon execution logs only.",
   "For API tests: open API Test — paste Swagger, Postman, cURL, or endpoint JSON; copy helpers and Scripts/API tests.",
   "For load tests: open Performance Test — same API input → JMeter (.jmx), k6 script, and performance strategy report.",
-  "For natural-language QA tasks: open Gosi Brain Workspace (header) — chat to generate scripts, analyze projects, APIs, and load tests.",
+  "For natural-language QA tasks: open Test Architect Chat — chat to generate scripts, analyze projects, APIs, and load tests.",
 ] as const;
 
 /** Gosi Brain QA Chat Workspace — conversational orchestration layer. */
 export const AI_WORKSPACE_STEPS = [
-  "Click Gosi Brain Workspace in the header (or open /ai-workspace).",
+  "Click Test Architect Chat in the sidebar (or open /ai-workspace).",
   "Set Context on the left: Active project, Platform, Gosi Brain memory mode, and optional current tab name.",
   "Optional: paste OpenAPI/Swagger or Postman collection JSON for API and performance requests.",
   "Type a request in plain language — e.g. “Generate login API tests”, “Analyze flaky locators”, “Run Project Analyze”.",

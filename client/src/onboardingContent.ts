@@ -95,9 +95,9 @@ export const WIZARD_SLIDES: WizardSlide[] = [
   },
   {
     id: "aiWorkspace",
-    title: "Gosi Brain QA Workspace",
+    title: "Test Architect Chat",
     body: [
-      "Open Gosi Brain Workspace from the header — a chat-first QA engineering surface.",
+      "Open Test Architect Chat from the sidebar — a chat-first QA engineering surface.",
       "Set Active project and optional Swagger/Postman in the context panel so the assistant stays project-aware.",
       "Ask in natural language: generate Groovy, API suites, load strategies, Project Analyze, locator healing, or architecture advice.",
       "The system routes your message to specialized agents and returns code, reports, and follow-up suggestions.",
@@ -125,7 +125,7 @@ export const WIZARD_SLIDES: WizardSlide[] = [
       "Try example templates under Manual to fill sample steps in one click.",
       "Use Page URL preview/auto-detect to fill locators; Mobile uses the Appium panel when Platform is Mobile.",
       "Enable Gosi Brain memory (team style) so Generate, Failure Analyzer, and API Test match your project conventions.",
-      "Use Gosi Brain Workspace for multi-step QA questions without switching tabs.",
+      "Use Test Architect Chat for multi-step QA questions without switching tabs.",
     ],
   },
 ];
@@ -172,7 +172,7 @@ export const HELP_TOPICS: Record<
     hint: PERFORMANCE_TEST_HINT,
   },
   aiWorkspace: {
-    title: "Gosi Brain QA Workspace",
+    title: "Test Architect Chat",
     steps: AI_WORKSPACE_STEPS,
     hint: AI_WORKSPACE_HINT,
   },

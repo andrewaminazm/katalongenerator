@@ -79,7 +79,7 @@ export const TUTORIAL_SPECS: TutorialSpec[] = [
   },
   {
     id: "ai-workspace",
-    title: "Gosi Brain QA Workspace",
+    title: "Test Architect Chat",
     description: "Chat-first QA with intent routing and project-aware agents.",
     category: "Gosi Brain",
     path: "/ai-workspace",
@@ -170,7 +170,7 @@ export const TUTORIAL_SPECS: TutorialSpec[] = [
   },
   {
     id: "workspace-memory",
-    title: "AI QA Workspace Memory",
+    title: "Test Architect Chat Memory",
     description: "Persistent flows and architecture injected into chat.",
     category: "Intelligence",
     path: "/ai-workspace",

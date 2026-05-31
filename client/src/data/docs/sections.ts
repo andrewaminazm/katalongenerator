@@ -11,7 +11,7 @@ export const DOC_SECTIONS: DocSection[] = [
 
 The main workspace has input tabs on the left (Manual, CSV, Jira, Gosi Brain Failure Analyzer, API Test, Performance Test) and generated output on the right. Project Intelligence lives in the lower panel for upload, indexing, and Project Analyze.
 
-Open **Gosi Brain Workspace** from the header (/ai-workspace) for a conversational QA layer — generate scripts, analyze projects, and plan API/performance work in natural language.
+Open **Test Architect Chat** from the sidebar (/ai-workspace) for a conversational QA layer — generate scripts, analyze projects, and plan API/performance work in natural language.
 
 Under **Gosi Brain** in the sidebar, **Execution Report** (/execution-report) turns CI or nightly run totals into release-readiness intelligence and an optional executive PDF — no project upload required.
 
@@ -28,7 +28,7 @@ This documentation center is independent of the generator UI. Bookmark /how-to-u
     ],
     tips: [
       "Use the ? menu Quick tour for a guided walkthrough without leaving the generator.",
-      "Hover i icons beside fields and header links (Documentation, Gosi Brain Workspace) for contextual help.",
+      "Hover i icons beside fields and sidebar links (Documentation, Test Architect Chat) for contextual help.",
     ],
     warnings: [
       "Generation does not execute tests in Katalon Runtime — you still run scripts in Katalon Studio or CI.",
@@ -164,7 +164,7 @@ It builds on Project Intelligence graph data and reads script sources for verify
     ],
     mistakes: [
       "Analyzing before indexing completes — wait for OR/keyword counts on upload.",
-      "Expecting automatic test creation — use Gosi Brain Workspace or generator tabs to implement fixes.",
+      "Expecting automatic test creation — use Test Architect Chat or generator tabs to implement fixes.",
     ],
     mediaPlaceholders: ["Coverage dashboard with heatmap and recommendation panel"],
   },
@@ -299,10 +299,11 @@ The engine integrates Project Intelligence, AI Memory style hints, and the exist
   },
   {
     id: "ai-qa-workspace",
-    title: "AI QA Workspace",
+    title: "Test Architect Chat",
     category: "intelligence",
-    summary: "Chat-first QA engineering — intent routing, agents, and project-aware context.",
+    summary: "Senior Automation QA Engineer — failure analysis, automation review, test design, and QA strategy (advisory only).",
     keywords: [
+      "test architect chat",
       "ai workspace",
       "chat",
       "assistant",
@@ -311,13 +312,13 @@ The engine integrates Project Intelligence, AI Memory style hints, and the exist
       "conversational",
       "qa architect",
     ],
-    content: `AI QA Workspace is a separate page (/ai-workspace) that turns natural-language requests into platform actions. It behaves like a senior QA architect: explains why, cites risks, and orchestrates existing engines instead of replacing the generator tabs.
+    content: `Test Architect Chat is powered by a Senior Automation QA Engineer persona with 15+ years of enterprise QA experience. It provides expert guidance, reviews, failure investigation, and generated test assets — it does not execute tests or modify files automatically.
 
-An intent router classifies each message (generate, analyze, explain, heal, performance, API, document, review) and dispatches to agents: Script Generator, API Agent, Performance Agent, Project Intelligence, Healing, Review, Documentation, and QA Advisor.
+The engineer helps with automation (Katalon, Selenium, API), testing strategy, failure/root-cause analysis, script review, test design, and quality engineering. Responses use Summary, Analysis, Risks, Recommendations, and Next Actions.
 
-Context travels with every message: active project ID, platform, Gosi Brain memory mode, optional tab name, and pasted Swagger or Postman JSON. Conversation history is stored per session on the server.`,
+An intent router can also dispatch to specialized agents (Script Generator, API, Performance, Project Intelligence) when you explicitly ask for generation or analysis. Context travels with every message: active project, platform, memory mode, and optional Swagger/Postman JSON.`,
     steps: [
-      "From the generator header, click Gosi Brain Workspace (hover the i icon for a short description).",
+      "From the sidebar under Gosi Brain, click Test Architect Chat.",
       "In the Context panel, select your indexed Active project and Gosi Brain memory mode (Learn + suggest recommended).",
       "Paste OpenAPI or Postman JSON when asking about API tests, negative scenarios, or load strategy.",
       "Enter a prompt — e.g. “Generate login custom keyword”, “Analyze duplicate flows”, “Create API regression suite”.",
@@ -344,11 +345,11 @@ Context travels with every message: active project ID, platform, Gosi Brain memo
       "Forgetting to set Active project before asking for findTestObject or Project Analyze.",
       "Expecting one chat message to run Katalon Runtime — generation is export/advisory only.",
     ],
-    mediaPlaceholders: ["AI Workspace chat with context panel and suggestion chips"],
+    mediaPlaceholders: ["Test Architect Chat with context panel and suggestion chips"],
   },
   {
     id: "ai-workspace-memory",
-    title: "AI QA Workspace Memory",
+    title: "Test Architect Chat Memory",
     category: "intelligence",
     summary:
       "Persistent enterprise QA intelligence — flows, locators, repairs, and architecture injected into workspace chat.",
@@ -360,7 +361,7 @@ Context travels with every message: active project ID, platform, Gosi Brain memo
       "flows",
       "repair memory",
     ],
-    content: `AI QA Workspace Memory is an additive intelligence layer on top of the existing AI QA Workspace Chat — not a second chat UI.
+    content: `Test Architect Chat Memory is an additive intelligence layer on top of Test Architect Chat — not a second chat UI.
 
 When a project is selected, the server indexes project structure, reusable flows, OR/locator health, API keywords, repair analysis, architecture graph, and team style from AI Memory. Each chat message triggers semantic retrieval; relevant memories are injected into the Gosi Brain prompt automatically.
 
@@ -369,7 +370,7 @@ Use the Workspace memory panel in the chat sidebar to re-index, search memories,
 APIs: POST /api/workspace-memory/index, /search, /learn; GET /insights, /flows, /graph, /risk, /recommendations per projectId.`,
     steps: [
       "Upload and index a project under Project Intelligence.",
-      "Open Gosi Brain Workspace and select the same Active project.",
+      "Open Test Architect Chat and select the same Active project.",
       "Keep Enterprise workspace memory enabled (default).",
       "Click Re-index memory after major repairs or re-uploads.",
       "Ask flow/locator/repair questions — e.g. “Show reusable checkout flows” or “Which locators fail most?”.",
@@ -657,7 +658,7 @@ Built-in lessons are WebM screen recordings of the real app UI in \`client/publi
     ],
     tips: [
       "Pair videos with Documentation search when you need troubleshooting detail or copy-paste examples.",
-      "Assign onboarding paths: Getting started → Project Intelligence → Manual generation → Gosi Brain Workspace.",
+      "Assign onboarding paths: Getting started → Project Intelligence → Manual generation → Test Architect Chat.",
     ],
     warnings: [
       "Embedded videos require network access to YouTube or your hosted video URL — blocked corporate firewalls may prevent playback.",

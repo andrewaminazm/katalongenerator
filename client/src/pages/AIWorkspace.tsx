@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SENIOR_QA_ENGINEER_DISPLAY } from "../data/seniorQaEngineer";
 import {
   fetchWorkspaceHistory,
   listKatalonProjects,
@@ -9,7 +10,7 @@ import {
 } from "../api";
 import { useLayoutContext } from "../components/layout/LayoutContext";
 import { MessageBubble, type ChatMessage } from "../components/chat/MessageBubble";
-import { PromptSuggestions } from "../components/chat/PromptSuggestions";
+import { ChatGenerationExamples } from "../components/chat/ChatGenerationExamples";
 import { Button } from "../components/ui/button";
 import { WorkspaceMemoryPanel } from "../components/chat/WorkspaceMemoryPanel";
 import "../components/chat/aiWorkspace.css";
@@ -38,14 +39,14 @@ export default function AIWorkspace() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [memoryCitations, setMemoryCitations] = useState<
     WorkspaceChatResponse["memoryCitations"]
   >([]);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
 
   useEffect(() => {
-    document.title = "AI Workspace — Katalon Script Generator";
+    document.title = "Test Architect Chat — Katalon Script Generator";
     listKatalonProjects()
       .then(setProjects)
       .catch(() => setProjects([]));
@@ -79,14 +80,74 @@ export default function AIWorkspace() {
       });
   }, []);
 
+  const scrollToLatestContent = useCallback((behavior: ScrollBehavior = "smooth", force = false) => {
+    const el = messagesRef.current;
+    if (!el) return;
+
+    if (!force && !stickToBottomRef.current) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom > 120) return;
+    }
+
+    const lastBubble = el.querySelector<HTMLElement>(".aiw-bubble--assistant:last-of-type");
+    const codeTarget =
+      lastBubble?.querySelector<HTMLElement>(".aiw-asset") ??
+      lastBubble?.querySelector<HTMLElement>(".aiw-code-block") ??
+      lastBubble;
+
+    if (codeTarget) {
+      const containerRect = el.getBoundingClientRect();
+      const targetRect = codeTarget.getBoundingClientRect();
+      const padding = 20;
+      if (targetRect.bottom > containerRect.bottom - padding) {
+        el.scrollTo({
+          top: el.scrollTop + (targetRect.bottom - containerRect.bottom) + padding,
+          behavior,
+        });
+        return;
+      }
+    }
+
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 120;
+  }, []);
+
+  useLayoutEffect(() => {
+    const scroll = (behavior: ScrollBehavior) => scrollToLatestContent(behavior, true);
+    scroll("auto");
+    const frame = requestAnimationFrame(() => {
+      scroll("smooth");
+      requestAnimationFrame(() => scroll("smooth"));
+    });
+    const timers = [50, 150, 400].map((ms) => window.setTimeout(() => scroll("auto"), ms));
+    return () => {
+      cancelAnimationFrame(frame);
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [messages, loading, scrollToLatestContent]);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    const el = messagesRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      scrollToLatestContent("smooth");
+    });
+    observer.observe(el);
+    for (const node of el.querySelectorAll(".aiw-bubble, .aiw-asset, .aiw-code-block")) {
+      observer.observe(node);
+    }
+    return () => observer.disconnect();
+  }, [messages, scrollToLatestContent]);
 
   const applyResponse = useCallback((res: WorkspaceChatResponse, userText: string) => {
     setSessionId(res.sessionId);
     localStorage.setItem(SESSION_KEY, res.sessionId);
-    setSuggestions(res.suggestions);
     setMemoryCitations(res.memoryCitations ?? []);
     setMessages((prev) => [
       ...prev,
@@ -109,6 +170,7 @@ export default function AIWorkspace() {
       if (!trimmed || loading) return;
       setError(null);
       setLoading(true);
+      stickToBottomRef.current = true;
       setInput("");
       try {
         const res = await sendWorkspaceChat({
@@ -130,7 +192,6 @@ export default function AIWorkspace() {
     setSessionId("");
     localStorage.removeItem(SESSION_KEY);
     setMessages([]);
-    setSuggestions([]);
     setError(null);
   };
 
@@ -140,8 +201,8 @@ export default function AIWorkspace() {
         {embedded ? null : (
           <header className="aiw-header">
             <div>
-              <h1>AI QA Workspace</h1>
-              <p>Chat with a QA architect — scripts, APIs, performance, project analysis, and healing</p>
+              <h1>Test Architect Chat</h1>
+              <p>{SENIOR_QA_ENGINEER_DISPLAY} — English & Arabic plain text; long conversations supported</p>
             </div>
           </header>
         )}
@@ -262,24 +323,20 @@ export default function AIWorkspace() {
         </aside>
 
         <div className="aiw-chat-main">
-          <PromptSuggestions
-            suggestions={suggestions}
-            onPick={(s) => void send(s)}
-            disabled={loading}
-          />
-
-          <div className="aiw-messages" role="log" aria-live="polite">
+          <div
+            ref={messagesRef}
+            className="aiw-messages"
+            role="log"
+            aria-live="polite"
+            onScroll={handleMessagesScroll}
+          >
             {messages.length === 0 && !loading && (
-              <p style={{ color: "var(--muted)", fontSize: "var(--text-small)" }}>
-                Ask anything about Katalon automation — generation, APIs, load tests, project analysis, or
-                locator healing. Context from the left panel is sent automatically.
-              </p>
+              <ChatGenerationExamples onPick={(s) => void send(s)} disabled={loading} />
             )}
             {messages.map((m) => (
               <MessageBubble key={m.id} message={m} />
             ))}
             {loading && <div className="aiw-thinking">Thinking…</div>}
-            <div ref={bottomRef} />
           </div>
 
           {error && (
@@ -291,7 +348,7 @@ export default function AIWorkspace() {
           <div className="aiw-composer">
             <textarea
               value={input}
-              placeholder="e.g. Generate login API tests with negative payment scenarios"
+              placeholder="Ask in English or Arabic — project review, Groovy generation, API, performance…"
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {

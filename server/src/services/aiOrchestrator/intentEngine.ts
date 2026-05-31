@@ -28,15 +28,36 @@ function scoreIntent(
     case "frameworkRefactor":
       return /\b(refactor|convert|migrate|redesign)\b/.test(lower) ? 84 : 0;
     case "debugging":
-      return /\b(debug|why|failing|failure|error|broken)\b/.test(lower) ? 82 : 0;
+      if (/\b(failing|failed|failure|error|broken|flaky|timeout|not working|doesn't work|doesnt work|keeps failing)\b/.test(lower)) {
+        return 88;
+      }
+      return /\b(debug|why|stack trace|log)\b/.test(lower) ? 82 : 0;
     case "codeReview":
       return /\b(review|audit|analyze code)\b/.test(lower) ? 80 : 0;
     case "projectAnalysis":
+      if (
+        /\b(analyze|audit|check|review|inspect|scan|look at|evaluate|assess)\b.*\b(project|framework|repo)\b/.test(
+          lower
+        )
+      ) {
+        return 90;
+      }
+      if (
+        /\b(my project|the project|this project|active project)\b/.test(lower) &&
+        /\b(check|review|analyze|inspect|audit|scan|look)\b/.test(lower)
+      ) {
+        return 92;
+      }
       return /\b(analyze|audit)\b.*\b(project|framework)\b/.test(lower) ? 86 : 0;
     case "conversationalAdvice":
-      return /\b(what is wrong|how should|recommend|suggest|advice|explain)\b/.test(lower)
-        ? 78
-        : 0;
+      if (
+        /\b(what is wrong|how should|recommend|suggest|advice|explain|help me|can you help|i need help|what should i|what do i|how do i|tell me|walk me through|not sure|confused)\b/.test(
+          lower
+        )
+      ) {
+        return 82;
+      }
+      return /\b(what|why|how|should|could|would)\b/.test(lower) ? 72 : 0;
     case "pageObjectGeneration":
       return /\bpage\s*object\b/.test(lower) ? 90 : 0;
     case "apiGeneration":
@@ -50,7 +71,16 @@ function scoreIntent(
     case "utilityGeneration":
       return detectGroovyUtilityIntent(raw) || analyzeArchitecturePrompt(raw) ? 88 : 0;
     case "testGeneration":
-      return looksLikeTestStepLine(raw) || /\b(test|click|verify|visit|navigate)\b/.test(lower)
+      if (
+        /\b(check|review|inspect|audit)\b/.test(lower) &&
+        /\b(project|framework)\b/.test(lower)
+      ) {
+        return 0;
+      }
+      if (/\b(i want|i need|help me|can you|please)\b.*\b(test|script|automate|login|checkout)\b/.test(lower)) {
+        return 78;
+      }
+      return looksLikeTestStepLine(raw) || /\b(test|click|verify|visit|navigate|generate|automate)\b/.test(lower)
         ? 75
         : 0;
     case "frameworkArchitecture":

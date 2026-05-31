@@ -1,12 +1,14 @@
 const DEFAULT_PROMPTS = [
-  "Generate login API tests with chained auth",
-  "Analyze flaky locators in my active project",
-  "Create regression suite for checkout flow",
-  "Explain Project Intelligence and Project Analyze",
-  "Generate performance smoke strategy for payment APIs",
-  "Convert Postman collection to Katalon structure",
-  "Fix weak assertions in API tests",
-  "Generate reusable login custom keyword",
+  "Generate automation for login with URL and step lines",
+  "Create a test script for checkout with verify steps",
+  "Generate a custom keyword for login with username and password",
+  "Create a groovy function for date formatting",
+  "Build a utility class for Excel test data",
+  "Generate a framework helper for retrying flaky clicks",
+  "Create a page object for the login page",
+  "Create an API helper for bearer token REST calls",
+  "Build a DB utility for Oracle SELECT verification",
+  "Generate a framework service for session token storage",
 ] as const;
 
 type Props = {

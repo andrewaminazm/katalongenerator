@@ -48,7 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "ai",
     label: "Gosi Brain",
     items: [
-      { id: "workspace", label: "QA Workspace", href: "/ai-workspace", icon: MessageSquare, badge: "AI" },
+      { id: "workspace", label: "Test Architect Chat", href: "/ai-workspace", icon: MessageSquare, badge: "AI" },
       { id: "coverage", label: "Coverage Analyzer", href: "/coverage", icon: Layers, badge: "AI" },
       { id: "refactor", label: "Refactoring Assistant", href: "/refactor", icon: Wrench, badge: "AI" },
       { id: "project-generator", label: "AI Project Generator", href: "/project-generator", icon: Package, badge: "AI" },
@@ -91,7 +91,7 @@ export type CommandAction = {
 
 export const COMMAND_ACTIONS: CommandAction[] = [
   { id: "gen-login", label: "Generate login test (Functional)", keywords: ["generate", "login", "test", "functional"], generatorTab: "manual" },
-  { id: "open-workspace", label: "Open Gosi Brain Workspace", keywords: ["chat", "workspace", "ai"], href: "/ai-workspace" },
+  { id: "open-workspace", label: "Open Test Architect Chat", keywords: ["chat", "architect", "ai", "workspace"], href: "/ai-workspace" },
   { id: "open-coverage", label: "Analyze API coverage", keywords: ["coverage", "gaps", "sonar"], href: "/coverage" },
   { id: "open-refactor", label: "Open Refactoring Assistant", keywords: ["refactor", "duplication", "maintainability"], href: "/refactor" },
   { id: "open-project-generator", label: "Open AI Project Generator", keywords: ["project", "generator", "framework", "scaffold", "architecture"], href: "/project-generator" },

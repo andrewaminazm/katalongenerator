@@ -37,7 +37,7 @@ export interface WorkspaceContextPayload {
   swagger?: string;
   /** Optional Postman collection JSON */
   postmanCollection?: string;
-  /** Recent manual steps from generator (optional) */
+  /** Recent steps/locators if synced from elsewhere (chat is the primary source) */
   steps?: string[];
   locators?: string;
   /** Enterprise workspace memory retrieval (default on when projectId set) */
@@ -92,6 +92,13 @@ export interface WorkspaceSession {
   createdAt: string;
   updatedAt: string;
   context: WorkspaceContextPayload;
+  /** Rolling facts from long conversations — avoids re-asking established context. */
+  conversationBrief?: {
+    topics: string[];
+    urls: string[];
+    platforms: string[];
+    userDecisions: string[];
+  };
   messages: Array<{
     id: string;
     role: "user" | "assistant";

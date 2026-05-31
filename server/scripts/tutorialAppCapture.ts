@@ -305,8 +305,8 @@ async function runFeatureDemo(page: Page, baseUrl: string, t: TutorialSpec): Pro
         { label: "Switch to API Test tab", action: async () => {
           await clickBtn(page, "API Test");
         }},
-        { label: "Open Gosi Brain QA Workspace", action: async () => {
-          await clickBtn(page, "QA Workspace");
+        { label: "Open Test Architect Chat", action: async () => {
+          await clickBtn(page, "Test Architect Chat");
         }},
         { label: "Open Video Tutorials in Utilities", action: async () => {
           await clickBtn(page, "Video Tutorials");
@@ -525,7 +525,7 @@ async function runFeatureDemo(page: Page, baseUrl: string, t: TutorialSpec): Pro
     case "workspace-memory": {
       await gotoApp(page, baseUrl, "/ai-workspace");
       await finishFeatureDemo(page, demoStart, [
-        { label: "Open QA Workspace with project context", action: async () => {} },
+        { label: "Open Test Architect Chat with project context", action: async () => {} },
         { label: "Enable enterprise workspace memory", action: async () => {
           const toggle = page.getByText(/workspace memory|enterprise memory/i).first();
           if (await toggle.isVisible().catch(() => false)) await highlight(page, toggle);

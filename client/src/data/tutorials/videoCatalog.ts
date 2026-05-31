@@ -96,7 +96,7 @@ const VIDEO_TUTORIAL_DEFINITIONS: Omit<VideoTutorial, "durationLabel">[] = [
   },
   {
     id: "ai-workspace",
-    title: "Gosi Brain QA Workspace",
+    title: "Test Architect Chat",
     description:
       "Chat-first QA: intent routing, project context, Swagger/Postman attachments, and multi-agent responses.",
     category: "gosi-brain",
@@ -166,7 +166,7 @@ const VIDEO_TUTORIAL_DEFINITIONS: Omit<VideoTutorial, "durationLabel">[] = [
   },
   {
     id: "workspace-memory",
-    title: "AI QA Workspace Memory",
+    title: "Test Architect Chat Memory",
     description:
       "Index flows, repairs, and architecture into persistent memory injected into workspace chat.",
     category: "intelligence",

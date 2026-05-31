@@ -7,7 +7,13 @@ import {
 } from "../aiMemory/index.js";
 import { retrieveForChat } from "../workspaceMemory/retrievalEngine.js";
 import type { RetrievalContext } from "../workspaceMemory/types.js";
-import type { WorkspaceContextPayload } from "./types.js";
+import type { WorkspaceContextPayload, WorkspaceSession } from "./types.js";
+import {
+  TEST_ARCHITECT_CHAT_PERSONA,
+  TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER,
+  SENIOR_QA_ENGINEER_NAME,
+} from "./testArchitectChatPrompt.js";
+import { replyLanguageInstruction } from "./bilingualText.js";
 
 export interface EnrichedWorkspaceContext {
   payload: WorkspaceContextPayload;
@@ -16,6 +22,10 @@ export interface EnrichedWorkspaceContext {
   workspaceMemoryInjection?: string;
   workspaceMemoryCitations?: RetrievalContext["citations"];
   conversationPrefsSummary?: string;
+  conversationHistory?: string;
+  /** Preferred reply language inferred from user messages. */
+  conversationLanguageMode?: "arabic" | "english" | "mixed";
+  historyMessages?: WorkspaceSession["messages"];
 }
 
 export async function enrichWorkspaceContext(
@@ -71,11 +81,7 @@ export async function enrichWorkspaceContext(
 }
 
 export function buildSystemContextBlock(ctx: EnrichedWorkspaceContext): string {
-  const lines: string[] = [
-    "You are a senior QA architect and Katalon automation expert inside Katalon Script Generator.",
-    "Explain WHY, cite risks, and follow enterprise QA best practices.",
-    "Never claim tests were executed — generation and analysis are advisory unless stated otherwise.",
-  ];
+  const lines: string[] = [TEST_ARCHITECT_CHAT_PERSONA, "", "# Current Session Context"];
 
   if (ctx.payload.activeTab) lines.push(`User UI context tab: ${ctx.payload.activeTab}`);
   if (ctx.payload.platform) lines.push(`Platform: ${ctx.payload.platform}`);
@@ -94,6 +100,20 @@ export function buildSystemContextBlock(ctx: EnrichedWorkspaceContext): string {
   }
   if (ctx.payload.steps?.length) {
     lines.push(`User steps:\n${ctx.payload.steps.join("\n")}`);
+  }
+  if (ctx.payload.locators?.trim()) {
+    lines.push(`Locators context:\n${ctx.payload.locators.trim().slice(0, 4000)}`);
+  }
+  if (ctx.conversationLanguageMode) {
+    lines.push(`Reply language: ${replyLanguageInstruction(ctx.conversationLanguageMode)}`);
+  }
+  if (ctx.conversationHistory?.trim()) {
+    lines.push(
+      `# Long conversation context (${SENIOR_QA_ENGINEER_NAME} ↔ user)\n` +
+        `This may be a long English thread. Maintain continuity: reference earlier topics, decisions, URLs, and test scope. ` +
+        `Do not repeat introductions every turn. Do not re-ask for details already in history or conversation memory.\n\n` +
+        `${ctx.conversationHistory}`
+    );
   }
 
   return lines.join("\n");

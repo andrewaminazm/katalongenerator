@@ -1,12 +1,26 @@
 import { isGosiBrainConfigured } from "../../../loadEnv.js";
 import { gosiBrainGenerate, stripGosiBrainCoT } from "../../gosiBrain.js";
-import { runOrchestration } from "../../aiOrchestrator/index.js";
-import { buildSuggestions } from "../../aiOrchestrator/responseAssembler.js";
 import { analyzeProjectV2 } from "../../projectIntelligenceV2/index.js";
 import { generatePerformanceSuite } from "../../performanceEngine/index.js";
+import { runOrchestration } from "../../aiOrchestrator/index.js";
 import type { EnrichedWorkspaceContext } from "../contextManager.js";
 import { buildSystemContextBlock } from "../contextManager.js";
+import { TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER } from "../testArchitectChatPrompt.js";
 import type { RoutedIntent } from "../intentRouter.js";
+import { isProjectReviewRequest } from "../intentRouter.js";
+import {
+  formatDetectedIntentBlock,
+  buildSeniorQaUnifiedTask,
+  containsForbiddenPlaceholderCode,
+} from "../generationReadiness.js";
+import {
+  collectGenerationSteps,
+  enrichPayloadFromChat,
+  groovyAssetTitle,
+  resolveCodeGenerationMode,
+  wantsKatalonScriptGeneration,
+} from "../workspaceScriptGeneration.js";
+import { SENIOR_QA_ENGINEER_NAME } from "../testArchitectChatPrompt.js";
 import type {
   WorkspaceAction,
   WorkspaceChatRequest,
@@ -35,7 +49,7 @@ async function advisoryReply(
     return {
       response:
         extra ??
-        `**Advisory (offline)**\n\n${message}\n\nConfigure Gosi Brain on the server or pass an authorization token to enable full QA reasoning.`,
+        `**Advisory (offline)**\n\n${message}\n\nConfigure Gosi Brain on the server or pass an authorization token to enable full Senior QA Engineer responses.`,
       model: "workspace-advisory",
     };
   }
@@ -46,7 +60,7 @@ ${message}
 
 ${extra ? `Task context:\n${extra}` : ""}
 
-Respond in clear markdown. Include risks, best practices, and concrete next steps in this product (tabs: Manual, API Test, Performance, Project Intelligence).`;
+${TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER}`;
 
   const { response, model: used } = await gosiBrainGenerate({
     prompt,
@@ -57,6 +71,197 @@ Respond in clear markdown. Include risks, best practices, and concrete next step
   return { response: stripGosiBrainCoT(response), model: used };
 }
 
+function offlineSeniorQaFallback(
+  message: string,
+  intent: RoutedIntent["intent"],
+  confidence: number,
+  platform: string,
+  projectId?: string
+): string {
+  return `${formatDetectedIntentBlock(intent, confidence)}
+
+## Understanding
+You asked for QA engineering help: "${message}".
+
+## Analysis
+Test Architect Chat always routes through Senior QA analysis first. Gosi Brain is not configured or no auth token was provided, so full reasoning is unavailable.
+
+## Missing Information
+- Target platform confirmation (current context: **${platform}**)
+- Application URL, locators, or requirements as applicable
+${projectId ? "" : "- Active Katalon project (none selected in context panel)"}
+
+## Assumptions
+None applied.
+
+## Recommended Test Design
+Clarify the goal, scope, and risk areas before generating automation.
+
+## Generated Output
+Configure Gosi Brain for full responses from **${SENIOR_QA_ENGINEER_NAME}**. — ${SENIOR_QA_ENGINEER_NAME}`;
+}
+
+async function seniorQaAnalysisReply(
+  message: string,
+  ctx: EnrichedWorkspaceContext,
+  route: RoutedIntent,
+  token: string | undefined,
+  model: string | undefined,
+  task: string
+): Promise<{ response: string; model: string }> {
+  if (!isGosiBrainConfigured() || !token?.trim()) {
+    return {
+      response: offlineSeniorQaFallback(
+        message,
+        route.intent,
+        route.confidence,
+        ctx.payload.platform ?? "web",
+        ctx.payload.projectId
+      ),
+      model: "workspace-senior-qa-offline",
+    };
+  }
+
+  return advisoryReply(message, ctx, token, model, task);
+}
+
+interface SupplementaryContext {
+  text: string;
+  assets: WorkspaceGeneratedAsset[];
+  warnings: string[];
+}
+
+async function gatherSupplementaryContext(
+  route: RoutedIntent,
+  message: string,
+  payload: WorkspaceContextPayload
+): Promise<SupplementaryContext> {
+  const assets: WorkspaceGeneratedAsset[] = [];
+  const warnings: string[] = [];
+  const parts: string[] = [];
+
+  const wantsProjectAnalysis =
+    route.intent === "analyze" ||
+    route.agent === "project_intelligence" ||
+    isProjectReviewRequest(message);
+
+  if (wantsProjectAnalysis && payload.projectId) {
+    try {
+      const analysis = await analyzeProjectV2(payload.projectId, {
+        healScripts: true,
+        healLocators: true,
+        generateDocumentation: true,
+      });
+      const md = analysis.documentation.markdown.slice(0, 12000);
+      assets.push({
+        kind: "report",
+        title: "Project analysis summary",
+        content: md,
+        language: "markdown",
+      });
+      parts.push(
+        [
+          `Project Analyze — risk score ${analysis.insights.riskScore}/100`,
+          `Script fixes (changed): ${analysis.fixes.testCases.filter((t) => t.changed).length}`,
+          `OR healing proposals: ${analysis.fixes.objectRepository.length}`,
+          `Flaky flags: ${analysis.insights.flakyTests.length}`,
+          analysis.warnings.length ? `Warnings: ${analysis.warnings.join(" · ")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      );
+      warnings.push(...analysis.warnings);
+    } catch (e) {
+      warnings.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  if (
+    route.intent === "document" &&
+    payload.projectId &&
+    !wantsProjectAnalysis
+  ) {
+    try {
+      const analysis = await analyzeProjectV2(payload.projectId, {
+        healScripts: false,
+        healLocators: false,
+        generateDocumentation: true,
+      });
+      assets.push({
+        kind: "markdown",
+        title: "Project documentation",
+        content: analysis.documentation.markdown,
+        language: "markdown",
+      });
+      parts.push("Project documentation markdown was generated — summarize key sections for the user.");
+    } catch (e) {
+      warnings.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  if (
+    route.intent === "performance" &&
+    (payload.swagger?.trim() || payload.postmanCollection?.trim())
+  ) {
+    try {
+      const suite = await generatePerformanceSuite({
+        inputType: payload.postmanCollection?.trim() ? "postman" : "openapi",
+        swagger: payload.swagger,
+        collection: payload.postmanCollection,
+        projectId: payload.projectId,
+        mode: "smoke",
+        output: ["strategy", "k6"],
+      });
+      if (suite.strategy) {
+        const json = JSON.stringify(suite.strategy, null, 2);
+        assets.push({
+          kind: "performance",
+          title: "Load strategy",
+          content: json,
+          language: "json",
+        });
+        parts.push(`Performance smoke strategy JSON:\n${json.slice(0, 8000)}`);
+      }
+      if (suite.k6) {
+        assets.push({
+          kind: "performance",
+          title: "k6 script",
+          content: suite.k6,
+          language: "javascript",
+        });
+        parts.push(`k6 starter script (first 4000 chars):\n${suite.k6.slice(0, 4000)}`);
+      }
+      warnings.push(...(suite.warnings ?? []));
+    } catch (e) {
+      warnings.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return { text: parts.join("\n\n"), assets, warnings };
+}
+
+function chatSuggestions(
+  route: RoutedIntent,
+  message: string,
+  payload: WorkspaceContextPayload
+): string[] {
+  const s: string[] = [];
+  if (!payload.projectId) s.push("Select your active Katalon project in the context panel.");
+  if (route.intent === "generate" || /\b(login|keyword|script|class|helper|page object)\b/i.test(message)) {
+    s.push('Say what to build in chat — e.g. "create a page object for login" or paste test steps.');
+    s.push("Include URL, locators, or step lines in your message when ready for Generated Groovy.");
+  }
+  if (route.intent === "analyze" || isProjectReviewRequest(message)) {
+    s.push("Which module has the highest release risk?");
+  }
+  if (!payload.swagger && !payload.postmanCollection) {
+    s.push("Attach Swagger or Postman JSON for API/performance depth.");
+  }
+  s.push("Review my project for risks and flaky tests");
+  return [...new Set(s)].slice(0, 4);
+}
+
+/** Test Architect Chat — every message is Senior QA analysis first. */
 export async function runWorkspaceAgent(
   route: RoutedIntent,
   message: string,
@@ -64,320 +269,92 @@ export async function runWorkspaceAgent(
   req: WorkspaceChatRequest
 ): Promise<AgentRunResult> {
   const payload = ctx.payload;
-  const platform = payload.platform ?? "web";
   const token = req.authorizationToken;
   const model = req.model;
-  const steps =
-    payload.steps?.length ? payload.steps : message.split(/\n/).map((s) => s.trim()).filter(Boolean);
 
-  const actions: WorkspaceAction[] = [];
-  const generatedAssets: WorkspaceGeneratedAsset[] = [];
-  const warnings: string[] = [];
+  route.agent = "qa_advisor";
 
-  switch (route.agent) {
-    case "script_generator": {
-      actions.push({ type: "orchestrate", label: "Ran script generation pipeline" });
+  const supplementary = await gatherSupplementaryContext(route, message, payload);
+  const task = buildSeniorQaUnifiedTask(
+    message,
+    route.intent,
+    route.confidence,
+    payload.platform ?? "web",
+    payload,
+    supplementary.text || undefined
+  );
+
+  const { response: qaResponse, model: m } = await seniorQaAnalysisReply(
+    message,
+    ctx,
+    route,
+    token,
+    model,
+    task
+  );
+
+  const steps = collectGenerationSteps(message, ctx.historyMessages ?? []);
+  const chatPayload = enrichPayloadFromChat(message, ctx.historyMessages ?? [], payload);
+  const generatedAssets = [...supplementary.assets];
+  const warnings = [...supplementary.warnings];
+  let response = qaResponse;
+  let code: string | undefined;
+  const actions: WorkspaceAction[] = [{ type: "advisory", label: "Senior QA analysis" }];
+
+  if (wantsKatalonScriptGeneration(route, message, steps, chatPayload, ctx.historyMessages ?? [])) {
+    const codeMode = resolveCodeGenerationMode(message, ctx.historyMessages ?? []);
+    try {
       const orch = await runOrchestration({
-        platform,
+        platform: chatPayload.platform ?? "web",
         prompt: message,
         steps,
-        locators: payload.locators,
-        url: payload.pageUrl,
-        projectId: payload.projectId,
-        projectGenerationMode: payload.projectGenerationMode,
-        aiMemoryMode: payload.aiMemoryMode,
-        orchestrationMode: "conversational",
-        authorizationToken: token,
-        model,
-        testCaseName: payload.testCaseName,
-      });
-      if (orch.code?.trim()) {
-        generatedAssets.push({
-          kind: "groovy",
-          title: "Generated Groovy",
-          content: orch.code,
-          language: "groovy",
-        });
-      }
-      const narrative =
-        orch.conversationalResponse?.trim() ||
-        `Generated **${route.intent}** output using the deterministic compiler and orchestrator (${orch.orchestration.generatorsUsed.join(", ")}).`;
-      return {
-        response: narrative,
-        actions,
-        generatedAssets,
-        suggestions: buildSuggestions(orch),
-        code: orch.code,
-        model: orch.model,
-        warnings: [...warnings, ...orch.warnings],
-      };
-    }
-
-    case "project_intelligence": {
-      if (!payload.projectId) {
-        const { response, model: m } = await advisoryReply(
-          message,
-          ctx,
-          token,
-          model,
-          "User asked for project analysis but no projectId was set in workspace context."
-        );
-        return {
-          response,
-          actions: [{ type: "hint", label: "Set Active project ID in workspace context" }],
-          generatedAssets,
-          suggestions: ["Upload a project in Project Intelligence, then paste its ID in context."],
-          model: m,
-          warnings,
-        };
-      }
-      actions.push({ type: "analyze", label: "Project Analyze v2" });
-      const analysis = await analyzeProjectV2(payload.projectId, {
-        healScripts: true,
-        healLocators: true,
-        generateDocumentation: true,
-      });
-      const md = analysis.documentation.markdown.slice(0, 12000);
-      generatedAssets.push({
-        kind: "report",
-        title: "Project analysis summary",
-        content: md,
-        language: "markdown",
-      });
-      const summary = [
-        `**Project Analyze** — risk **${analysis.insights.riskScore}/100**`,
-        `- Script fixes (changed): ${analysis.fixes.testCases.filter((t) => t.changed).length}`,
-        `- OR healing proposals: ${analysis.fixes.objectRepository.length}`,
-        `- Flaky flags: ${analysis.insights.flakyTests.length}`,
-        analysis.warnings.length ? `\nWarnings: ${analysis.warnings.join(" · ")}` : "",
-      ].join("\n");
-      return {
-        response: summary,
-        actions,
-        generatedAssets,
-        suggestions: [
-          "Download PDF documentation from Project Intelligence.",
-          "Click script rows to apply Groovy fixes.",
-          "Click OR rows to heal locators with a Page URL.",
-        ],
-        warnings: analysis.warnings,
-        model: "project-intelligence-v2",
-      };
-    }
-
-    case "performance_agent": {
-      if (payload.swagger?.trim() || payload.postmanCollection?.trim()) {
-        actions.push({ type: "performance", label: "Generated performance suite" });
-        try {
-          const suite = await generatePerformanceSuite({
-            inputType: payload.postmanCollection?.trim() ? "postman" : "openapi",
-            swagger: payload.swagger,
-            collection: payload.postmanCollection,
-            projectId: payload.projectId,
-            mode: "smoke",
-            output: ["strategy", "k6"],
-          });
-          if (suite.strategy) {
-            generatedAssets.push({
-              kind: "performance",
-              title: "Load strategy",
-              content: JSON.stringify(suite.strategy, null, 2),
-              language: "json",
-            });
-          }
-          if (suite.k6) {
-            generatedAssets.push({
-              kind: "performance",
-              title: "k6 script",
-              content: suite.k6,
-              language: "javascript",
-            });
-          }
-          return {
-            response: `Created a **smoke** performance strategy and k6 starter script from your attached API definition. Review SLA hints in the strategy JSON before running load in QA.`,
-            actions,
-            generatedAssets,
-            suggestions: [
-              "Switch to Stress mode in Performance Test tab for full VU plans.",
-              "Run k6 locally: k6 run script.js",
-            ],
-            model: "performance-engine",
-            warnings: suite.warnings ?? [],
-          };
-        } catch (e) {
-          warnings.push(e instanceof Error ? e.message : String(e));
-        }
-      }
-      const { response, model: m } = await advisoryReply(
-        message,
-        ctx,
-        token,
-        model,
-        "Performance Agent: attach Swagger or Postman JSON in workspace context, or use Performance Test tab."
-      );
-      return {
-        response,
-        actions,
-        generatedAssets,
-        suggestions: ["Open Performance Test tab with the same API input."],
-        model: m,
-        warnings,
-      };
-    }
-
-    case "api_agent": {
-      if (payload.swagger?.trim() || payload.postmanCollection?.trim()) {
-        const { response, model: m } = await advisoryReply(
-          message,
-          ctx,
-          token,
-          model,
-          "API Agent: use API Test tab to generate full Katalon + Postman artifacts from the attached spec. Summarize recommended folder structure, auth chaining, and assertion strategy."
-        );
-        actions.push({ type: "api", label: "API advisory with attached spec" });
-        return {
-          response,
-          actions,
-          generatedAssets,
-          suggestions: [
-            "Open API Test tab and paste the same Swagger/Postman.",
-            "Enable project APIs if indexed.",
-            "Generate negative payment scenarios?",
-          ],
-          model: m,
-          warnings,
-        };
-      }
-      const orch = await runOrchestration({
-        platform: "web",
-        prompt: message,
-        steps,
-        projectId: payload.projectId,
+        locators: chatPayload.locators,
+        url: chatPayload.pageUrl,
+        projectId: chatPayload.projectId,
+        projectGenerationMode: chatPayload.projectGenerationMode,
+        aiMemoryMode: chatPayload.aiMemoryMode,
         orchestrationMode: "advanced",
         authorizationToken: token,
         model,
+        testCaseName: chatPayload.testCaseName,
+        codeGenerationMode: codeMode,
+        deterministicCompiler: true,
       });
-      if (orch.code?.trim()) {
+      const groovy = orch.code?.trim() ?? "";
+      if (groovy && !containsForbiddenPlaceholderCode(groovy)) {
         generatedAssets.push({
-          kind: "api",
-          title: "API-related Groovy",
-          content: orch.code,
+          kind: "groovy",
+          title: groovyAssetTitle(codeMode),
+          content: groovy,
           language: "groovy",
         });
-      }
-      return {
-        response:
-          orch.conversationalResponse ??
-          "API-oriented generation complete. Paste Swagger/Postman in workspace context for full suite output.",
-        actions: [{ type: "orchestrate", label: "API / orchestrator path" }],
-        generatedAssets,
-        suggestions: buildSuggestions(orch),
-        code: orch.code,
-        model: orch.model,
-        warnings: orch.warnings,
-      };
-    }
-
-    case "healing_agent": {
-      const { response, model: m } = await advisoryReply(
-        message,
-        ctx,
-        token,
-        model,
-        "Healing Agent: recommend locator strategy, OR cleanup, Playwright preview, and Project Intelligence OR row healing."
-      );
-      return {
-        response,
-        actions: [{ type: "heal", label: "Locator healing guidance" }],
-        generatedAssets,
-        suggestions: [
-          "Click OR rows in Project Intelligence with a Page URL.",
-          "Use Convert to Katalon locators before Generate.",
-        ],
-        model: m,
-        warnings,
-      };
-    }
-
-    case "review_agent": {
-      const orch = await runOrchestration({
-        platform,
-        prompt: message,
-        steps,
-        projectId: payload.projectId,
-        orchestrationMode: "architecture_review",
-        authorizationToken: token,
-        model,
-      });
-      return {
-        response:
-          orch.conversationalResponse ??
-          "Architecture review complete. See generated artifacts and lint hints.",
-        actions: [{ type: "review", label: "Architecture review" }],
-        generatedAssets: orch.code
-          ? [{ kind: "groovy", title: "Review output", content: orch.code, language: "groovy" }]
-          : [],
-        suggestions: buildSuggestions(orch),
-        code: orch.code,
-        model: orch.model,
-        warnings: orch.warnings,
-      };
-    }
-
-    case "documentation_agent": {
-      if (payload.projectId) {
-        const analysis = await analyzeProjectV2(payload.projectId, {
-          healScripts: false,
-          healLocators: false,
-          generateDocumentation: true,
+        code = groovy;
+        route.agent = "script_generator";
+        actions.push({
+          type: "generate",
+          label: `Katalon ${codeMode === "auto" ? "script" : codeMode.replace(/_/g, " ")}`,
         });
-        generatedAssets.push({
-          kind: "markdown",
-          title: "Project documentation",
-          content: analysis.documentation.markdown,
-          language: "markdown",
-        });
-        return {
-          response: "Generated project documentation markdown from Project Analyze. Export PDF from Project Intelligence when ready.",
-          actions: [{ type: "document", label: "Documentation generated" }],
-          generatedAssets,
-          suggestions: ["Download docs (PDF) in Project Intelligence."],
-          model: "documentation-v2",
-          warnings: [],
-        };
+        if (!response.includes("Generated Groovy")) {
+          response += `\n\n---\n**Generated Katalon output** — same compiler as the Manual tab (**${codeMode.replace(/_/g, " ")}**). Review the **Generated Groovy** block below and copy into Katalon Studio.\n`;
+        }
+        if (orch.warnings?.length) warnings.push(...orch.warnings);
+      } else if (groovy && containsForbiddenPlaceholderCode(groovy)) {
+        warnings.push(
+          "Script compiler produced placeholder steps — add clearer step lines in chat or the Context panel."
+        );
       }
-      const { response, model: m } = await advisoryReply(message, ctx, token, model);
-      return {
-        response,
-        actions: [{ type: "document", label: "Documentation advisory" }],
-        generatedAssets,
-        suggestions: ["Open /how-to-use for product guides."],
-        model: m,
-        warnings,
-      };
-    }
-
-    case "qa_advisor":
-    default: {
-      const { response, model: m } = await advisoryReply(message, ctx, token, model);
-      return {
-        response,
-        actions: [{ type: "advisory", label: "QA architect advisory" }],
-        generatedAssets,
-        suggestions: relatedSuggestions(payload, route.intent),
-        model: m,
-        warnings,
-      };
+    } catch (e) {
+      warnings.push(e instanceof Error ? e.message : String(e));
     }
   }
-}
 
-function relatedSuggestions(payload: WorkspaceContextPayload, intent: string): string[] {
-  const s: string[] = [];
-  if (!payload.projectId) s.push("Upload a Katalon project for project-aware generation.");
-  if (intent === "explain") s.push("Paste execution logs in AI Failure Analyzer.");
-  if (!payload.swagger && !payload.postmanCollection) {
-    s.push("Attach Swagger or Postman JSON in workspace context for API/perf tasks.");
-  }
-  return s.slice(0, 4);
+  return {
+    response,
+    actions,
+    generatedAssets,
+    suggestions: chatSuggestions(route, message, payload),
+    model: m,
+    warnings: warnings.length ? warnings : undefined,
+    code,
+  };
 }
