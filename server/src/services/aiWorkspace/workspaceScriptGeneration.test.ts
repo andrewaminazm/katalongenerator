@@ -1,20 +1,24 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   inferCodeGenerationModeFromText,
   resolveCodeGenerationMode,
   wantsKatalonScriptGeneration,
 } from "./workspaceScriptGeneration.js";
 import type { WorkspaceMessage } from "./conversationHistory.js";
+import type { RoutedIntent } from "./intentRouter.js";
 
 describe("workspaceScriptGeneration", () => {
   it("infers page object from chat text", () => {
-    expect(inferCodeGenerationModeFromText("Create a page object for the login screen")).toBe(
+    assert.equal(
+      inferCodeGenerationModeFromText("Create a page object for the login screen"),
       "page_object"
     );
   });
 
   it("infers custom keyword from chat text", () => {
-    expect(inferCodeGenerationModeFromText("Generate a custom keyword for checkout")).toBe(
+    assert.equal(
+      inferCodeGenerationModeFromText("Generate a custom keyword for checkout"),
       "custom_keyword"
     );
   });
@@ -28,16 +32,21 @@ describe("workspaceScriptGeneration", () => {
         timestamp: "2026-01-01T00:00:00Z",
       },
     ];
-    expect(resolveCodeGenerationMode("Now make it a page object instead", history)).toBe(
+    assert.equal(
+      resolveCodeGenerationMode("Now make it a page object instead", history),
       "page_object"
     );
   });
 
   it("allows architectural generation from a single chat line", () => {
-    const route = { intent: "generate" as const, agent: "qa_advisor" as const, confidence: 0.9 };
+    const route: RoutedIntent = {
+      intent: "generate",
+      agent: "qa_advisor",
+      confidence: 0.9,
+      orchestratorIntent: "testGeneration",
+      secondaryIntents: [],
+    };
     const msg = "Generate a framework helper class for retrying flaky clicks";
-    expect(
-      wantsKatalonScriptGeneration(route, msg, [msg], {}, [])
-    ).toBe(true);
+    assert.equal(wantsKatalonScriptGeneration(route, msg, [msg], {}, []), true);
   });
 });

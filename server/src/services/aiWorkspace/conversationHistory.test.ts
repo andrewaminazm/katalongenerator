@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   buildConversationHistoryForPrompt,
   buildRoutingMessage,
@@ -21,10 +22,10 @@ const msg = (
 
 describe("conversationHistory", () => {
   it("detects short follow-ups and context references", () => {
-    expect(isConversationalFollowUp("yes please")).toBe(true);
-    expect(isConversationalFollowUp("what about negative cases?")).toBe(true);
-    expect(isConversationalFollowUp("same for mobile as we discussed")).toBe(true);
-    expect(isConversationalFollowUp("create test script for login with url and locators")).toBe(false);
+    assert.equal(isConversationalFollowUp("yes please"), true);
+    assert.equal(isConversationalFollowUp("what about negative cases?"), true);
+    assert.equal(isConversationalFollowUp("same for mobile as we discussed"), true);
+    assert.equal(isConversationalFollowUp("create test script for login with url and locators"), false);
   });
 
   it("formats prior messages for the prompt", () => {
@@ -32,8 +33,8 @@ describe("conversationHistory", () => {
       msg("user", "help me with login"),
       msg("assistant", "What platform?"),
     ]);
-    expect(text).toContain("User: help me with login");
-    expect(text).toContain("Gosi Brain:");
+    assert.match(text, /User: help me with login/);
+    assert.match(text, /Gosi Brain:/);
   });
 
   it("expands routing message for follow-ups", () => {
@@ -42,8 +43,8 @@ describe("conversationHistory", () => {
       msg("assistant", "What is the login URL?"),
     ];
     const routed = buildRoutingMessage("yes it's https://app.example.com/login", history);
-    expect(routed).toContain("login test");
-    expect(routed).toContain("https://app.example.com/login");
+    assert.match(routed, /login test/);
+    assert.match(routed, /https:\/\/app\.example\.com\/login/);
   });
 
   it("builds tiered history for long conversations", () => {
@@ -53,10 +54,10 @@ describe("conversationHistory", () => {
         : msg("assistant", `Reply ${i} from Gosi Brain`)
     );
     const text = buildConversationHistoryForPrompt(history);
-    expect(text).toContain("Conversation memory");
-    expect(text).toContain("Earlier conversation");
-    expect(text).toContain("Recent conversation");
-    expect(text).toContain("login");
+    assert.match(text, /Conversation memory/);
+    assert.match(text, /Earlier conversation/);
+    assert.match(text, /Recent conversation/);
+    assert.match(text, /login/);
   });
 
   it("extracts and merges conversation facts", () => {
@@ -66,14 +67,14 @@ describe("conversationHistory", () => {
       msg("user", "yes use keywords"),
     ];
     const facts = extractConversationFacts(history);
-    expect(facts.urls[0]).toContain("https://app.example.com/login");
-    expect(facts.topics).toContain("login");
-    expect(facts.platforms).toContain("web");
+    assert.match(facts.urls[0] ?? "", /https:\/\/app\.example\.com\/login/);
+    assert.ok(facts.topics.includes("login"));
+    assert.ok(facts.platforms.includes("web"));
 
     const merged = mergeConversationBrief(facts, [
       ...history,
       msg("user", "also checkout on https://shop.example.com"),
     ]);
-    expect(merged.topics).toContain("checkout");
+    assert.ok(merged.topics.includes("checkout"));
   });
 });

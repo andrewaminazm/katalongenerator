@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   detectUserLanguageMode,
   isBilingualProjectReviewRequest,
@@ -8,22 +9,22 @@ import { isConversationalFollowUp } from "./conversationHistory.js";
 
 describe("bilingualText", () => {
   it("detects Arabic user language", () => {
-    expect(detectUserLanguageMode(["ساعدني في اختبار تسجيل الدخول"])).toBe("arabic");
-    expect(detectUserLanguageMode(["help me test login"])).toBe("english");
-    expect(detectUserLanguageMode(["ساعدني with login test"])).toBe("mixed");
+    assert.equal(detectUserLanguageMode(["ساعدني في اختبار تسجيل الدخول"]), "arabic");
+    assert.equal(detectUserLanguageMode(["help me test login"]), "english");
+    assert.equal(detectUserLanguageMode(["ساعدني with login test"]), "mixed");
   });
 
   it("recognizes Arabic project review", () => {
-    expect(isBilingualProjectReviewRequest("راجع مشروعي")).toBe(true);
+    assert.equal(isBilingualProjectReviewRequest("راجع مشروعي"), true);
   });
 
   it("boosts Arabic help and failure intents", () => {
-    expect(matchBilingualIntentBoost("ساعدني في الاختبار")?.intent).toBe("explain");
-    expect(matchBilingualIntentBoost("الاختبار فاشل")?.intent).toBe("explain");
+    assert.equal(matchBilingualIntentBoost("ساعدني في الاختبار")?.intent, "explain");
+    assert.equal(matchBilingualIntentBoost("الاختبار فاشل")?.intent, "explain");
   });
 
   it("recognizes Arabic follow-ups", () => {
-    expect(isConversationalFollowUp("نعم")).toBe(true);
-    expect(isConversationalFollowUp("ماذا عن الحالات السلبية؟")).toBe(true);
+    assert.equal(isConversationalFollowUp("نعم"), true);
+    assert.equal(isConversationalFollowUp("ماذا عن الحالات السلبية؟"), true);
   });
 });
