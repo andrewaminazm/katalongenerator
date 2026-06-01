@@ -1,17 +1,22 @@
 import express from "express";
 import {
   generateExecutionReport,
+  generateExecutiveQaIntelligence,
   type ExecutionReportInput,
 } from "../services/executionReport/index.js";
-import { executionReportToPdfBuffer } from "../services/executionReport/executionReportPdf.js";
+import {
+  executionReportPdfFilename,
+  executionReportToPdfBuffer,
+} from "../services/executionReport/executionReportPdf.js";
+import { normalizeReportPdfType } from "../services/executionReport/executionReportPdfTypes.js";
 
 export function createExecutionReportRouter(): express.Router {
   const router = express.Router();
 
-  router.post("/generate", (req, res) => {
+  router.post("/generate", async (req, res, next) => {
     try {
       const body = req.body as ExecutionReportInput;
-      const report = generateExecutionReport(body);
+      const report = await buildReportWithExecutiveIntelligence(body, req.headers.authorization);
       res.json(report);
     } catch (e) {
       res.status(400).json({ error: e instanceof Error ? e.message : String(e) });
@@ -21,11 +26,12 @@ export function createExecutionReportRouter(): express.Router {
   router.post("/pdf", async (req, res, next) => {
     try {
       const body = req.body as ExecutionReportInput;
-      const report = generateExecutionReport(body);
-      const pdf = await executionReportToPdfBuffer(report);
-      const safeName = `${body.projectName.replace(/[^a-zA-Z0-9_-]/g, "_")}_${body.buildId}`;
+      const report = await buildReportWithExecutiveIntelligence(body, req.headers.authorization);
+      const reportType = normalizeReportPdfType(body.reportType);
+      const pdf = await executionReportToPdfBuffer(report, reportType);
+      const filename = executionReportPdfFilename(body.projectName, body.buildId, reportType);
       res.setHeader("Content-Type", "application/pdf");
-      res.setHeader("Content-Disposition", `attachment; filename="${safeName}-execution-report.pdf"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(pdf);
     } catch (e) {
       next(e);
@@ -37,6 +43,35 @@ export function createExecutionReportRouter(): express.Router {
   });
 
   return router;
+}
+
+async function buildReportWithExecutiveIntelligence(
+  body: ExecutionReportInput,
+  authorization?: string
+) {
+  const report = generateExecutionReport(body);
+  const reportType = normalizeReportPdfType(body.reportType);
+  const needsExecutive =
+    body.includeExecutiveIntelligence !== false ||
+    reportType === "executive" ||
+    reportType === "release";
+  if (!needsExecutive) return report;
+
+  const preferAi =
+    body.preferAiNarrative === true || reportType === "executive";
+
+  const intel = await generateExecutiveQaIntelligence(body, report, {
+    authorizationToken: typeof authorization === "string" ? authorization : undefined,
+    preferAi,
+  });
+  report.executiveIntelligence = {
+    markdown: intel.markdown,
+    directorStatus: intel.directorStatus,
+    deploymentRecommendation: intel.deploymentRecommendation,
+    generatedBy: intel.generatedBy,
+    model: intel.model,
+  };
+  return report;
 }
 
 export function sampleExecutionInput(): ExecutionReportInput {

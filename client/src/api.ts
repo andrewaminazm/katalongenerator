@@ -1754,6 +1754,9 @@ export interface ExecutionReportInput {
   pipelineName?: string;
   branch?: string;
   triggeredBy?: string;
+  includeExecutiveIntelligence?: boolean;
+  preferAiNarrative?: boolean;
+  reportType?: string;
 }
 
 export interface ExecutionReportOutput {
@@ -1802,6 +1805,19 @@ export interface ExecutionReportOutput {
   chartData: Record<string, unknown>;
   pdfLayoutSpec: Record<string, unknown>;
   generatedAt: string;
+  executiveIntelligence?: {
+    markdown: string;
+    directorStatus: "READY" | "AT RISK" | "BLOCKED" | "CRITICAL";
+    deploymentRecommendation: {
+      decision: string;
+      reasoning: string;
+      confidencePercent: number;
+      majorRisks: string[];
+      requiredActions: string[];
+    };
+    generatedBy: "deterministic" | "gosi_brain";
+    model?: string;
+  };
 }
 
 export async function fetchExecutionReportSample(): Promise<ExecutionReportInput> {

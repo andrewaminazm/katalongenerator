@@ -28,6 +28,29 @@ export interface TestExecutionInput {
   duration: string;
 }
 
+export type DeploymentDecision =
+  | "Deploy"
+  | "Deploy With Monitoring"
+  | "Deploy To Staging Only"
+  | "Do Not Deploy"
+  | "Block Release";
+
+export interface DeploymentRecommendation {
+  decision: DeploymentDecision;
+  reasoning: string;
+  confidencePercent: number;
+  majorRisks: string[];
+  requiredActions: string[];
+}
+
+export interface ExecutiveIntelligenceSection {
+  markdown: string;
+  directorStatus: "READY" | "AT RISK" | "BLOCKED" | "CRITICAL";
+  deploymentRecommendation: DeploymentRecommendation;
+  generatedBy: "deterministic" | "gosi_brain";
+  model?: string;
+}
+
 export interface ExecutionReportInput {
   projectName: string;
   buildId: string;
@@ -39,6 +62,12 @@ export interface ExecutionReportInput {
   pipelineName?: string;
   branch?: string;
   triggeredBy?: string;
+  /** When true (default), attach 12-section Executive QA Intelligence narrative */
+  includeExecutiveIntelligence?: boolean;
+  /** When false, skip Gosi Brain and use deterministic narrative only */
+  preferAiNarrative?: boolean;
+  /** PDF / preview report type — must match client tab selection */
+  reportType?: string;
 }
 
 export interface ExecutiveSummary {
@@ -151,4 +180,6 @@ export interface ExecutionReportOutput {
   chartData: ChartDataSet;
   pdfLayoutSpec: PdfLayoutSpec;
   generatedAt: string;
+  /** 12-section AI Executive QA Intelligence Report (Gosi Brain or deterministic) */
+  executiveIntelligence?: ExecutiveIntelligenceSection;
 }

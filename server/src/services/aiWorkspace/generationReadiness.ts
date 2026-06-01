@@ -1,5 +1,20 @@
 import { looksLikeTestStepLine } from "../testDsl/groovyUtilityIntent.js";
 import type { WorkspaceContextPayload, WorkspaceIntent } from "./types.js";
+import {
+  formatAgentActivationBlock,
+  selectQaAgentsForRequest,
+  backendAgentsInvoked,
+  type QaOrchestratorAgentId,
+} from "./qaOrchestratorAgents.js";
+import type { RoutedIntent } from "./intentRouter.js";
+import {
+  QA_ORCHESTRATOR_EVIDENCE_RULES,
+  QA_ORCHESTRATOR_RESPONSE_FORMAT,
+} from "./qaOrchestratorPrompt.js";
+import {
+  EXECUTIVE_QA_INTELLIGENCE_REMINDER,
+  wantsExecutiveQaIntelligenceReport,
+} from "../executionReport/executiveQaIntelligencePrompt.js";
 
 const FORBIDDEN_CODE_MARKERS = [
   /UNPARSED STEP/i,
@@ -96,41 +111,60 @@ export function buildSeniorQaUnifiedTask(
   confidence: number,
   platform: string,
   payload: WorkspaceContextPayload,
-  supplementaryContext?: string
+  supplementaryContext?: string,
+  route?: RoutedIntent,
+  orchestrationOpts?: {
+    agents?: QaOrchestratorAgentId[];
+    backendInvoked?: Parameters<typeof backendAgentsInvoked>[0];
+  }
 ): string {
   const projectLine = payload.projectId
     ? `Active project ID: ${payload.projectId}`
     : "No active project selected in workspace context.";
 
   const intentFocus = intentFocusGuidance(intent);
+  const agents =
+    orchestrationOpts?.agents ??
+    (route ? selectQaAgentsForRequest(route, message) : selectQaAgentsForRequest(
+        { intent, agent: "qa_advisor", confidence, orchestratorIntent: "conversationalAdvice", secondaryIntents: [] },
+        message
+      ));
+  const agentBlock = formatAgentActivationBlock(agents, intent, confidence);
+  const backendBlock = orchestrationOpts?.backendInvoked
+    ? backendAgentsInvoked(orchestrationOpts.backendInvoked)
+    : "";
+  const executiveReport = wantsExecutiveQaIntelligenceReport(message, intent);
+  const responseFormat = executiveReport
+    ? EXECUTIVE_QA_INTELLIGENCE_REMINDER
+    : QA_ORCHESTRATOR_RESPONSE_FORMAT;
+  const executiveFocus = executiveReport
+    ? "\n**Executive mode:** Produce the full **12-section AI Executive QA Intelligence Report** (Sections 1–12). Section 12 deployment recommendation is mandatory. Cluster failures in Section 5 — no laundry list."
+    : "";
 
-  return `${formatDetectedIntentBlock(intent, confidence)}
+  return `${agentBlock}
 
-Every Test Architect Chat message is handled by a Senior Automation QA Engineer — analyze first, respond second. Never behave as a template compiler.
+You are the QA Director (${formatDetectedIntentBlock(intent, confidence)}). Coordinate the activated agents, then merge into one response.
 
-Read the conversation history in session context when present. The latest user message may be a short follow-up — interpret it using prior turns.
+Read conversation history in session context. The latest message may be a short follow-up.
 
 **Latest user message:** ${message}
 **Session context:** Platform=${platform}; ${projectLine}
 
-${intentFocus}
+${intentFocus}${executiveFocus}
 
-${supplementaryContext ? `## Supplementary workspace data (use in your analysis)\n${supplementaryContext}\n` : ""}
+${backendBlock ? `${backendBlock}\n` : ""}
+${supplementaryContext ? `## Supplementary workspace data (ground agent findings in this)\n${supplementaryContext}\n` : ""}
+
+${QA_ORCHESTRATOR_EVIDENCE_RULES}
 
 CRITICAL RULES:
-- Perform QA analysis BEFORE any code or artifacts.
+- Simulate only activated agents; deduplicate across agents.
 - NEVER output UNPARSED STEP, UNKNOWN LOCATOR, TODO IMPLEMENT, or PLACEHOLDER markers.
-- Challenge weak requirements; list missing information and assumptions.
-- Include positive, negative, boundary, validation, and error-handling scenarios in test design.
-- Groovy/code in Generated Output only when assumptions are explicit and the code is complete.
+- Section 2 metrics MUST follow evidence rules — use EVIDENCE PACK numbers or Unknown.
+- Section 6 references UI-attached artifacts; do not duplicate full Groovy in markdown.
+- Tag findings with P0–P4 where appropriate.
 
-Use these sections in order:
-## Understanding
-## Analysis
-## Missing Information
-## Assumptions
-## Recommended Test Design
-## Generated Output`;
+${responseFormat}`;
 }
 
 function intentFocusGuidance(intent: WorkspaceIntent): string {

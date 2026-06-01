@@ -1,25 +1,58 @@
 # Katalon Script Generator
 
-Production-oriented web app that converts:
+Production-oriented web platform powered by **Gosi Brain** that converts manual test steps, CSV, Jira issues, and API specs into **Katalon Studio Groovy** (WebUI / Mobile), plus enterprise QA intelligence — coverage, refactoring, project scaffolding, repair, execution reporting, and conversational Test Architect Chat.
 
-- manual test steps (free-text)
-- CSV files
-- Jira issues
-- Playwright-recorded flows
+## Platform overview
 
-…into **Katalon Studio Groovy** scripts (WebUI / Mobile keywords).
+| Area | Route / tab | What it does |
+|------|-------------|--------------|
+| **Functional Test** | Manual tab | Plain-language steps → deterministic Katalon Groovy (WebUI / Mobile). |
+| **API Test** | API tab | Swagger, Postman, cURL, or endpoint JSON → Katalon API helpers + test scripts + Postman export. |
+| **Performance Test** | Performance tab | Same API inputs → JMeter (.jmx), k6 scripts, and load strategy reports. |
+| **Failure Analyzer** | Failure tab | Paste Katalon execution logs → plain-English root cause, flaky hints, and fix suggestions. |
+| **Test Architect Chat** | `/ai-workspace` | Gosi Brain **AI QA Orchestrator** — multi-agent QA Director; unified release-style response; chat-driven Groovy (EN/AR). |
+| **Coverage Analyzer** | `/coverage` | Module coverage, weak assertions, unused OR/keywords, risk heatmaps (indexed project). |
+| **Refactoring Assistant** | `/refactor` | Maintainability, duplication, wait stability, OR/keyword health recommendations. |
+| **AI Project Generator** | `/project-generator` | Full Katalon project scaffold (.zip) — OR, pages, keywords, suites, docs, health score. |
+| **AI Project Repair** | `/project-repair` | Analyze flaky scripts/locators; preview diffs; safe auto-repairs; download repaired .zip. |
+| **Execution Report** | `/execution-report` | CI pass/fail totals → release readiness, module risk, charts, executive PDF. |
+| **Project Intelligence** | Generator panel | Upload `.zip`/`.rar` — reuse OR paths, keywords, Project Analyze, AI memory. |
+| **Video Tutorials** | `/video-tutorials` | Short in-app WebM walkthroughs per feature. |
+| **Documentation** | `/how-to-use` | Searchable user guide for every tab and Gosi Brain tool. |
 
-## What’s new (latest)
+## What’s new (latest — Gosi Brain AI QA Orchestrator)
 
-- **AI API Automation Architect** (**API Test** tab): generate **enterprise-grade Katalon API Groovy** *and* **Postman Collection v2.1** from the same API input (Swagger/OpenAPI, Postman, cURL, or endpoint JSON).
-- **Performance Test** tab: generate **JMeter (.jmx)**, **k6** load scripts, and a **performance strategy report** from the same API sources (smoke, baseline, stress, spike, soak).
-- **Semantic API intelligence**: endpoints grouped into business modules (Authentication, Users, Orders, Payments, etc.), with chained variables (IDs/tokens), stronger validations, security + boundary scenarios, and readable payload sizes (256/512/1024 — no absurd giant strings).
-- **Postman export**: download `.postman_collection.json` and `.postman_environment.json` (Local/Dev/QA/Staging/Prod templates) with reusable variables and scripts.
+| Feature | What it does |
+|---------|--------------|
+| **AI QA Orchestrator (Test Architect Chat)** | Gosi Brain acts as a **QA Director** — coordinates specialized agents per intent, merges one release-style response (not a generic chatbot). |
+| **Structured response (6 sections)** | Executive summary (READY / AT RISK / …), health scores, agent findings, critical blockers, prioritized action plan, generated artifacts. |
+| **Intent-based agent selection** | Only relevant agents activate (e.g. failure → Failure + Repair + Flaky; project review → Coverage + Release Risk + Security). |
+| **Backend-grounded analysis** | Project Analyze, performance suite, and deterministic compiler feed real data into the Director prompt when applicable. |
+| **Chat-driven Katalon generation** | Say artifact type in chat (test script, page object, keyword, …) — no Code output dropdown; same compiler as Manual when steps are ready. |
+| **Generation readiness gates** | Blocks vague requests and placeholder Groovy (`UNPARSED STEP`); asks for URL, steps, and locators first. |
+| **Bilingual chat (English & Arabic)** | Language detection, Arabic intents, and follow-ups (“نعم”, “ماذا عن الحالات السلبية؟”). |
+| **Long conversation memory** | Tiered history, conversation brief, and extracted facts (URLs, topics, platform) across long threads. |
+| **Chat capability examples** | Empty-state examples by category — click to send a full prompt. |
+| **Deploy-safe server build** | `tsconfig.build.json` excludes `*.test.ts` from production `tsc` (no vitest required on deploy). |
 
-This repo supports two generation modes:
+## Gosi Brain enterprise tools (May 2026)
 
-- **Deterministic compiler (default)**: no LLM required for compiling steps → Groovy.
-- **Legacy LLM path (optional)**: uses **local Ollama** by default, with optional **Google Gemini** when `GEMINI_API_KEY` is set on the server.
+| Feature | What it does |
+|---------|--------------|
+| **AI Coverage Analyzer** | Scans indexed projects for coverage gaps, weak assertions, unused assets, duplicate flows, and module risk heatmaps. |
+| **AI Refactoring Assistant** | Framework maintainability review — duplication, waits, assertions, OR/keyword drilldowns with before/after previews. |
+| **AI Katalon Project Generator** | Enterprise project scaffold with dependency graph, health score, and downloadable `.zip`. |
+| **AI Project Repair Engine** | Flaky-test and locator analysis; preview diffs; conservative auto-repairs; repaired project export. |
+| **AI Execution Report Generator** | Release readiness (READY / AT_RISK / BLOCKED), module risk, charts, executive PDF — no project upload. |
+| **Enterprise workspace memory** | Semantic memory (flows, locators, repairs) injected into Test Architect Chat with citations. |
+| **Video Tutorials** | ~45s WebM demos per feature with synced duration labels. |
+| **Modern platform shell** | Sidebar navigation, command palette, embedded layouts, API health badge. |
+
+## Script generation modes
+
+- **Deterministic compiler (default)**: compiles steps → Groovy without an LLM; uses project index for `findTestObject` and `CustomKeywords`.
+- **Gosi Brain (recommended for AI)**: configured via `GOSI_BRAIN_*` in `server/.env` — powers Failure Analyzer, Test Architect Chat, advisory text, utility synthesis, and optional LLM enrichment.
+- **Legacy LLM path (optional)**: local **Ollama** or **Google Gemini** (`GEMINI_API_KEY`) when `deterministicCompiler: false` on `/api/generate`.
 
 ## Quickstart (local dev)
 
@@ -81,12 +114,13 @@ Settings = //button[contains(normalize-space(.),'Settings') or contains(@aria-la
 
 Optional features you can enable in the UI:
 
+- **Test Architect Chat** (`/ai-workspace`): **Gosi Brain AI QA Orchestrator** — multi-agent Director responses, project review, API/performance guidance, and chat-inferred Groovy (EN/AR). Set **Active project** and optional Swagger/Postman in the context panel.
 - **Katalon project intelligence**: upload a full Katalon Studio `.zip` or `.rar`, browse Object Repository and Keywords, select an **active project** and **generation mode**, then Generate — the deterministic compiler reuses `findTestObject('…')` and `CustomKeywords.'…'` when matches score above threshold. See `docs/PROJECT_INTELLIGENCE_ARCHITECTURE.md`.
-- **AI Groovy Function Generator** (`server/src/services/groovyArchitecture/`): enterprise helpers, page objects, API/DB utilities, login flows with retry/session/screenshot/logging — not just test steps. Example: `create reusable login helper with retry and session validation`. Code output modes include **Page object**, **API helper**, **DB utility**, **Framework service**.
-- **AI Memory for test patterns**: on upload/reindex the server scans the indexed project and stores a **team style profile** under `server/data/ai-memory/{projectId}.json` (naming, waits, assertions, locator strategy, top keywords, reusable flows). Set **AI memory (team style)** when a project is active: `disabled` | `learn_only` | `learn_suggest` (default) | `adaptive`. **Learn + suggest** injects style into LLM prompts and utility AI synthesis; responses include `styleMatchScore` and helper reuse hints. `GET /api/projects/:projectId/memory` (`?refresh=1` rebuilds from index).
-- **Auto-detect locators**: runs Playwright on a URL and merges results with your locator text.
-- **Record mode**: opens a headed browser *on the machine running the server*, records actions, and converts them into steps/locators.
-- **Convert to Katalon Locators**: converts Selenium/Cypress/Playwright locator styles into Katalon-friendly CSS/XPath.
+- **AI Groovy Function Generator** (`server/src/services/groovyArchitecture/`): enterprise helpers, page objects, API/DB utilities, login flows with retry/session/screenshot/logging. **Code output** on Manual: Auto, test script, custom keyword, page object, utility class, framework helper, API helper, DB utility, framework service.
+- **AI Memory for test patterns**: team style profile under `server/data/ai-memory/{projectId}.json`. Modes: `disabled` | `learn_only` | `learn_suggest` (default) | `adaptive`. `GET /api/projects/:projectId/memory` (`?refresh=1` rebuilds).
+- **Auto-detect locators**: Playwright on a Page URL merges locators into the Locators box.
+- **Convert to Katalon Locators**: converts Selenium/Cypress/Playwright styles into Katalon-friendly CSS/XPath.
+- **Web Record mode**: removed from the product UI (headless production servers); API routes remain for self-hosted use. **Mobile Record** (Appium proxy) is still available on the Mobile panel.
 
 ## Performance Test (JMeter + k6)
 
@@ -262,16 +296,108 @@ This prevents silent wrong matches (for example, “click Settings” incorrectl
 - **End-user guide — how to use every tab (Markdown)**: `docs/USER_GUIDE.md`
 - **End-user guide (PDF)**: `docs/USER_GUIDE.pdf` — rebuild with `npm run docs:user-pdf`
 
+## Test Architect Chat (Gosi Brain AI QA Orchestrator)
+
+Open **Gosi Brain → Test Architect Chat** (`/ai-workspace`).
+
+Gosi Brain is a **QA Director**, not a single assistant. For each message the server:
+
+1. **Classifies intent** (generate, analyze, failure, performance, …)
+2. **Selects agents** to simulate (see table below)
+3. **Runs backends** when applicable (project analyze, performance engine, Katalon compiler)
+4. **Merges** into one engineering-grade reply via Gosi Brain
+
+### Specialized agents (internal)
+
+| Agent | Role |
+|-------|------|
+| Test Architect | Strategy, cases, edge/negative scenarios |
+| Automation | Katalon Groovy (WebUI / Mobile / API) |
+| API QA | Contracts, validations, negative API cases |
+| Performance QA | Load/stress scenarios (JMeter / k6 logic) |
+| Coverage Analysis | Gaps, untested flows, weak automation |
+| Failure Analysis | Logs, root cause, confidence |
+| Repair | Locator fixes, waits, stabilization |
+| Flaky Test Detection | Instability patterns, flakiness risk |
+| Release Risk | Release readiness, deployment risk |
+| QA Quality & Security | Test smells, framework/security issues |
+
+### Example agent selection
+
+| You ask | Agents activated (typical) |
+|---------|---------------------------|
+| Review my project | Coverage, Flaky, Security & Quality, Release Risk |
+| Fix failing login test | Failure Analysis, Repair, Flaky, Automation |
+| Create page object for checkout | Test Architect, Automation |
+| Generate API regression from Swagger | Test Architect, API QA, Automation |
+
+### Response format (always)
+
+1. **EXECUTIVE QA SUMMARY** — READY / NOT READY / AT RISK / CRITICAL  
+2. **QA HEALTH SCORES** — coverage, stability, flakiness, automation quality, release readiness (0–100; label inferred vs data-backed)  
+3. **AGENT FINDINGS** — bullets per activated agent only  
+4. **CRITICAL RISKS (BLOCKERS)**  
+5. **ACTION PLAN (PRIORITIZED)**  
+6. **GENERATED ARTIFACTS** — Groovy blocks, reports (expandable in UI; compiler output referenced, not duplicated in prose)
+
+### Usage
+
+1. Set **Active project**, **Platform**, and **AI memory** in the context panel (Swagger/Postman optional for API/performance depth).
+2. Ask in **English or Arabic** — paste steps, URLs, or logs in the message when ready.
+3. Use empty-state **example cards** to try common prompts.
+4. Copy **Generated Groovy** from expandable assets when the deterministic compiler runs.
+
+### Orchestration flow
+
+```
+User message → intentRouter → selectQaAgentsForRequest()
+  → gatherSupplementaryContext() [project v2 analyze | performance suite]
+  → Gosi Brain (Director prompt + activated agents + supplementary JSON/text)
+  → optional runOrchestration() → Groovy asset if steps pass readiness gates
+  → response + generatedAssets + suggestions
+```
+
+### API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/ai-workspace/chat` | `{ sessionId?, message, context?, model? }` + optional `Authorization` bearer |
+| `GET` | `/api/ai-workspace/history/:sessionId` | Session history |
+
+### Key server modules
+
+| File | Purpose |
+|------|---------|
+| `qaOrchestratorPrompt.ts` | QA Director persona + strict section 1–6 format |
+| `qaOrchestratorAgents.ts` | Intent → agent list + backend-invocation hints |
+| `workspaceScriptGeneration.ts` | Chat-inferred code output type + generation gates |
+| `conversationHistory.ts` | Long-thread memory and follow-up routing |
+| `bilingualText.ts` | English / Arabic detection and intent boosts |
+| `agents/runAgents.ts` | Chat pipeline orchestration |
+
+### Strengthening responses (roadmap)
+
+Current orchestration **simulates** agents in one LLM call and **grounds** some answers in real backends. Planned improvements:
+
+- Parallel calls to Coverage / Refactor / Repair APIs → structured JSON merge (not invented scores)
+- Evidence tags on findings: `(from project analyze)` vs `(inferred)`
+- UI badges for which engines ran on each reply
+
+Health scores should be treated as **estimates** unless project analyze or CI data is in context.
+
+---
+
 ## Architecture
 
 | Layer | Stack |
 |--------|--------|
-| Frontend | React 18 + Vite + TypeScript |
+| Frontend | React 18 + Vite + TypeScript — platform shell, sidebar nav, embedded chat |
 | Backend | Node.js 20+ + Express + TypeScript |
-| Locators / record | Playwright (Chromium): `/api/locators`, headful record (`/api/record/start` + poll status/result), and generate `mode: "record"` |
-| AI | **Ollama** `POST /api/generate` (default `http://localhost:11434`) or **Gemini** REST (`GEMINI_API_KEY` in `.env`) |
-| Groovy (web) | **Deterministic compiler** (default) + **post-processing** + **lint** — see below |
-| Compiler | `server/src/services/katalonCompiler/` — action mapping, locator scoring, TestObject build, assembly, validation |
+| Locators | Playwright (Chromium): `/api/locators`, auto-detect on generate; optional record APIs (self-hosted) |
+| AI | **Gosi Brain** (primary) — `GOSI_BRAIN_*` env; optional **Ollama** / **Gemini** for legacy `/api/generate` |
+| Groovy | **Deterministic compiler** (default) + post-processing + lint |
+| Intelligence | `aiWorkspace/`, `coverageAnalyzer/`, `refactorAssistant/`, `projectGenerator/`, `projectRepair/`, `executionReport/`, `projectIntelligenceV2/`, `workspaceMemory/` |
+| Compiler | `server/src/services/katalonCompiler/` |
 
 ### Data flow
 
@@ -365,6 +491,7 @@ kataloncode/
 ├── server/
 │   ├── package.json
 │   ├── tsconfig.json
+│   ├── tsconfig.build.json   # production build (excludes **/*.test.ts)
 │   ├── data/                 # history.json (created at runtime)
 │   └── src/
 │       ├── index.ts          # Express app
@@ -384,6 +511,19 @@ kataloncode/
 │       │   ├── postmanGenerator/     # Postman Collection v2.1 generator
 │       │   ├── performanceEngine/    # JMeter + k6 + load strategy from APIs
 │       │   ├── apiArchitect/         # Shared semantic intelligence (folders, chaining, scenarios, assertions)
+│       │   ├── aiWorkspace/          # Test Architect Chat, QA Orchestrator, bilingual, generation readiness
+│       │   │   ├── qaOrchestratorPrompt.ts
+│       │   │   ├── qaOrchestratorAgents.ts
+│       │   │   ├── workspaceScriptGeneration.ts
+│       │   │   └── agents/runAgents.ts
+│       │   ├── coverageAnalyzer/     # Coverage gaps, heatmaps, recommendations
+│       │   ├── refactorAssistant/    # Maintainability and duplication analysis
+│       │   ├── projectGenerator/     # Full Katalon project scaffold
+│       │   ├── projectRepair/        # Repair analysis, diffs, safe auto-fixes
+│       │   ├── executionReport/      # Release readiness + PDF
+│       │   ├── workspaceMemory/      # Semantic memory for chat
+│       │   ├── aiOrchestrator/       # Multi-capability routing for chat generation
+│       │   ├── failureAnalysis/      # Failure Analyzer (log → plain English)
 │       │   ├── csvParser.ts
 │       │   ├── jira.ts       # REST v3 + runtime credentials; demo if omitted
 │       │   ├── playwright.ts # headless extract locators
@@ -395,7 +535,9 @@ kataloncode/
     ├── package.json
     ├── vite.config.ts        # dev proxy /api → :8787
     └── src/
-        ├── App.tsx           # UI: tabs, generate, project panel, record/mobile
+        ├── App.tsx           # UI: Manual, API, Performance, Failure tabs + project panel
+        ├── pages/AIWorkspace.tsx   # Test Architect Chat
+        ├── RootApp.tsx       # Platform shell + routing
         ├── Onboarding.tsx    # wizard + help dialog
         ├── onboardingContent.ts  # wizard slides, step templates, localStorage key
         ├── FieldTip.tsx      # field-level help (i icons)
@@ -412,14 +554,11 @@ kataloncode/
   npm run playwright:install
   ```
 
-- **Ollama** (default LLM): installed and running (`ollama serve`), with at least one model pulled, e.g.:
+- **Gosi Brain (recommended):** set `GOSI_BRAIN_CHAT_URL`, `GOSI_BRAIN_API_KEY`, and optionally `GOSI_BRAIN_MODEL` / `GOSI_BRAIN_AUTHORIZATION_TOKEN` in `server/.env`. Powers Failure Analyzer, Test Architect Chat, and AI enrichment.
 
-  ```bash
-  ollama pull llama3.2
-  ollama pull codellama
-  ```
+- **Ollama (optional legacy):** `ollama serve` + a pulled model if using `deterministicCompiler: false` with Ollama.
 
-- **Gemini (optional):** set `GEMINI_API_KEY` in `.env` to enable the Gemini option in the UI; the key stays on the server only.
+- **Gemini (optional legacy):** `GEMINI_API_KEY` in `.env` for legacy LLM generate path.
 
 ## Setup
 
@@ -492,7 +631,16 @@ Open **http://localhost:5173** (or the port Vite prints if 5173 is busy).
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `GET` | `/api/health` | Health + Ollama base URL + default model + **Gemini** / **Gosi Brain** configured flags + default model ids |
+| `GET` | `/api/health` | Health + **Gosi Brain** / Gemini / Ollama configured flags + default model ids |
+| `POST` | `/api/ai-workspace/chat` | Test Architect Chat — `{ sessionId?, message, context?, model? }` → intent, response, generatedAssets, suggestions |
+| `GET` | `/api/ai-workspace/history/:sessionId` | Chat session history |
+| `POST` | `/api/coverage/analyze` | Coverage analysis for indexed `projectId` (+ optional Swagger) |
+| `POST` | `/api/refactor/analyze` | Refactoring / maintainability analysis |
+| `POST` | `/api/project-generator/generate` | Scaffold full Katalon project → downloadable zip |
+| `POST` | `/api/project-repair/analyze` | Project repair analysis; preview/apply/download endpoints |
+| `POST` | `/api/execution-report/generate` | Release readiness report JSON |
+| `POST` | `/api/execution-report/pdf` | Executive PDF download |
+| `POST` | `/api/workspace-memory/index` | Index workspace memory for chat retrieval |
 | `POST` | `/api/generate` | Body includes `platform`, `steps[]`, optional **`deterministicCompiler`** (default `true` — no LLM; set `false` for legacy Ollama/Gemini), optional `llm`, `model`, `stream`, `mode`, `recordedPlaywrightScript`, `url`, `locators`, `autoDetectLocators`, `pageLocale`, Katalon project XML / imports, optional **`projectId`** + **`projectGenerationMode`** (`strict_reuse` \| `balanced` \| `generate_everything`) to reuse indexed OR/keywords, `testTemplate`, `stylePass`, `commentLanguage`, … → Groovy + **`lint`**. Response may include **`compilerWarnings`**, **`deterministic: true`**, **`projectIntelligence`** (bindings per step). **422** if deterministic output fails validation. **`mode: "record"`** (web only): if `url` is set and `recordedPlaywrightScript` is omitted, runs a **headful** record session on the server, then merges locators; failures fall back to `steps` in the body. With a prior record result, send `recordedPlaywrightScript` and omit `url` to skip re-recording. |
 | `POST` | `/api/api-generator/swagger` | Generate **Katalon API Groovy** from Swagger/OpenAPI (`{ spec, projectId?, testCaseName?, includeNegative?, includeBoundary?, aiMemoryMode? }`) |
 | `POST` | `/api/api-generator/postman` | Generate **Katalon API Groovy** from a Postman collection (`{ collection, ... }`) |
@@ -551,7 +699,8 @@ The UI and `/api/generate` support:
 - **Record mode:** live browser recording + Playwright script for the prompt.
 - **Auto-detect locators:** Playwright pass over `url` to merge CSS/XPath hints.
 - **Katalon project intelligence:** upload `.zip`/`.rar`, pick **Active project** and generation mode (`strict_reuse` | `balanced` | `generate_everything`); reuse OR paths and `CustomKeywords` from indexed sources.
-- **Gosi Brain:** optional server-side LLM when `GOSI_BRAIN_*` env vars are set (UI model dropdown).
+- **Gosi Brain:** primary AI when `GOSI_BRAIN_*` env vars are set (Failure Analyzer, Test Architect Chat, model dropdown on Manual).
+- **Code output modes:** Auto, test script, custom keyword, Groovy function, utility class, framework helper, page object, API helper, DB utility, framework service (Manual tab); chat infers the same types from natural language.
 - **Test templates:** e.g. smoke, regression, data-driven (prompt shaping).
 - **Style pass:** e.g. `simplify` formatting.
 - **Comments:** English or Arabic for step comments.
@@ -619,7 +768,9 @@ cd client && npm run build
 
 Serve `client/dist` as static files and reverse-proxy `/api` to the Node server on port `8787` (or set `PORT`). Leave `VITE_API_URL` empty so the UI uses same-origin `/api`.
 
-**Note:** Playwright record/locator routes need a long-lived Node process with Chromium installed — they do not run on Netlify serverless functions. Use Record and auto-detect locators against a self-hosted or Render backend.
+**Note:** Playwright locator routes need a long-lived Node process with Chromium installed — they do not run on Netlify serverless functions. Use auto-detect locators and a self-hosted or Render backend. Web Record UI was removed; record APIs remain for self-hosted installs.
+
+**Build:** `cd server && npm run build` uses `tsconfig.build.json` (excludes `**/*.test.ts`). Run tests locally with `cd server && npm test`.
 
 ## Quality notes
 

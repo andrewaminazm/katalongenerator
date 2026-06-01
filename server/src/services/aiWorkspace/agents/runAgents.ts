@@ -20,6 +20,8 @@ import {
   resolveCodeGenerationMode,
   wantsKatalonScriptGeneration,
 } from "../workspaceScriptGeneration.js";
+import { buildQaEvidencePack, evidenceGatherFlags } from "../qaEvidencePack.js";
+import { selectQaAgentsForRequest } from "../qaOrchestratorAgents.js";
 import { SENIOR_QA_ENGINEER_NAME } from "../testArchitectChatPrompt.js";
 import type {
   WorkspaceAction,
@@ -66,7 +68,7 @@ ${TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER}`;
     prompt,
     authorizationToken: token,
     model,
-    temperature: 0.5,
+    temperature: 0.35,
   });
   return { response: stripGosiBrainCoT(response), model: used };
 }
@@ -80,25 +82,33 @@ function offlineSeniorQaFallback(
 ): string {
   return `${formatDetectedIntentBlock(intent, confidence)}
 
-## Understanding
-You asked for QA engineering help: "${message}".
+### 1. EXECUTIVE QA SUMMARY
+**Status:** AT RISK — Gosi Brain is not configured or no auth token was provided; multi-agent orchestration is unavailable offline.
 
-## Analysis
-Test Architect Chat always routes through Senior QA analysis first. Gosi Brain is not configured or no auth token was provided, so full reasoning is unavailable.
+You asked: "${message}".
 
-## Missing Information
-- Target platform confirmation (current context: **${platform}**)
-- Application URL, locators, or requirements as applicable
-${projectId ? "" : "- Active Katalon project (none selected in context panel)"}
+### 2. QA HEALTH DASHBOARD
+- **Coverage:** Unknown — Confidence: 0% — Insufficient evidence (offline).
+- **Stability:** Unknown — Confidence: 0% — Insufficient evidence.
+- **Automation Quality:** Unknown — Confidence: 0% — Insufficient evidence.
+- **Flakiness:** Unknown — Confidence: 0% — Insufficient evidence.
+- **Release Readiness:** Unknown — Confidence: 0% — Insufficient evidence.
 
-## Assumptions
-None applied.
+### 3. AGENT FINDINGS
+- **Test Architect Agent:** Clarify goal, platform (**${platform}**), and scope before automation.
+${projectId ? "" : "- **Coverage Agent:** Select an active Katalon project in the context panel for project-backed analysis.\n"}
 
-## Recommended Test Design
-Clarify the goal, scope, and risk areas before generating automation.
+### 4. CRITICAL RISKS (BLOCKERS)
+- Full QA Director reasoning requires Gosi Brain configuration on the server.
 
-## Generated Output
-Configure Gosi Brain for full responses from **${SENIOR_QA_ENGINEER_NAME}**. — ${SENIOR_QA_ENGINEER_NAME}`;
+### 5. ACTION PLAN (PRIORITIZED)
+1. Configure \`GOSI_BRAIN_CHAT_URL\` and \`GOSI_BRAIN_API_KEY\` in \`server/.env\`.
+2. Provide URL, locators, or concrete test steps for generation requests.
+
+### 6. GENERATED ARTIFACTS
+None (offline).
+
+— **${SENIOR_QA_ENGINEER_NAME}**`;
 }
 
 async function seniorQaAnalysisReply(
@@ -161,11 +171,15 @@ async function gatherSupplementaryContext(
       });
       parts.push(
         [
-          `Project Analyze — risk score ${analysis.insights.riskScore}/100`,
-          `Script fixes (changed): ${analysis.fixes.testCases.filter((t) => t.changed).length}`,
-          `OR healing proposals: ${analysis.fixes.objectRepository.length}`,
-          `Flaky flags: ${analysis.insights.flakyTests.length}`,
-          analysis.warnings.length ? `Warnings: ${analysis.warnings.join(" · ")}` : "",
+          `### Project Intelligence v2 (analyzer — use for dashboard evidence)`,
+          `- Project risk score: ${analysis.insights.riskScore}/100 (source: project analyze)`,
+          `- Flaky tests flagged: ${analysis.insights.flakyTests.length} (source: project analyze)`,
+          `- Script fixes (changed): ${analysis.fixes.testCases.filter((t) => t.changed).length}`,
+          `- OR healing proposals: ${analysis.fixes.objectRepository.length}`,
+          analysis.insights.flakyTests.length
+            ? `- Flaky sample: ${analysis.insights.flakyTests.slice(0, 6).join("; ")}`
+            : "",
+          analysis.warnings.length ? `- Warnings: ${analysis.warnings.join(" · ")}` : "",
         ]
           .filter(Boolean)
           .join("\n")
@@ -272,16 +286,50 @@ export async function runWorkspaceAgent(
   const token = req.authorizationToken;
   const model = req.model;
 
+  const wantsProjectAnalysis =
+    route.intent === "analyze" || isProjectReviewRequest(message);
+
   route.agent = "qa_advisor";
 
-  const supplementary = await gatherSupplementaryContext(route, message, payload);
+  let evidenceFlags = evidenceGatherFlags(route, message, payload.projectId);
+  if (wantsProjectAnalysis) {
+    evidenceFlags = { ...evidenceFlags, includeProjectAnalyze: false };
+  }
+  const agents = selectQaAgentsForRequest(route, message);
+
+  const [supplementary, evidencePack] = await Promise.all([
+    gatherSupplementaryContext(route, message, payload),
+    buildQaEvidencePack({
+      projectId: payload.projectId,
+      swagger: payload.swagger,
+      postmanCollection: payload.postmanCollection,
+      route,
+      message,
+      ...evidenceFlags,
+    }),
+  ]);
+
+  const wantsPerf =
+    route.intent === "performance" &&
+    Boolean(payload.swagger?.trim() || payload.postmanCollection?.trim());
+
+  const combinedContext = [evidencePack, supplementary.text].filter(Boolean).join("\n\n");
+
   const task = buildSeniorQaUnifiedTask(
     message,
     route.intent,
     route.confidence,
     payload.platform ?? "web",
     payload,
-    supplementary.text || undefined
+    combinedContext || undefined,
+    route,
+    {
+      agents,
+      backendInvoked: {
+        projectAnalysis: wantsProjectAnalysis && Boolean(payload.projectId),
+        performanceSuite: wantsPerf,
+      },
+    }
   );
 
   const { response: qaResponse, model: m } = await seniorQaAnalysisReply(
@@ -299,9 +347,17 @@ export async function runWorkspaceAgent(
   const warnings = [...supplementary.warnings];
   let response = qaResponse;
   let code: string | undefined;
-  const actions: WorkspaceAction[] = [{ type: "advisory", label: "Senior QA analysis" }];
+  const actions: WorkspaceAction[] = [{ type: "advisory", label: "QA Orchestrator analysis" }];
 
-  if (wantsKatalonScriptGeneration(route, message, steps, chatPayload, ctx.historyMessages ?? [])) {
+  const willGenerate = wantsKatalonScriptGeneration(
+    route,
+    message,
+    steps,
+    chatPayload,
+    ctx.historyMessages ?? []
+  );
+
+  if (willGenerate) {
     const codeMode = resolveCodeGenerationMode(message, ctx.historyMessages ?? []);
     try {
       const orch = await runOrchestration({
@@ -334,8 +390,8 @@ export async function runWorkspaceAgent(
           type: "generate",
           label: `Katalon ${codeMode === "auto" ? "script" : codeMode.replace(/_/g, " ")}`,
         });
-        if (!response.includes("Generated Groovy")) {
-          response += `\n\n---\n**Generated Katalon output** — same compiler as the Manual tab (**${codeMode.replace(/_/g, " ")}**). Review the **Generated Groovy** block below and copy into Katalon Studio.\n`;
+        if (!response.includes("GENERATED ARTIFACTS") && !response.includes("Generated Groovy")) {
+          response += `\n\n---\n### 6. GENERATED ARTIFACTS\n**Automation Agent** — Katalon output (**${codeMode.replace(/_/g, " ")}**) is in the expandable Groovy block below (same compiler as Manual). Copy into Katalon Studio after review.\n`;
         }
         if (orch.warnings?.length) warnings.push(...orch.warnings);
       } else if (groovy && containsForbiddenPlaceholderCode(groovy)) {

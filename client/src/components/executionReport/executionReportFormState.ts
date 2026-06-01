@@ -1,4 +1,5 @@
 import type { ExecutionReportInput } from "../../api";
+import { reportTypeApiFlags, type ExecutionReportViewType } from "./executionReportTypes";
 
 export type FailureSeverityOption = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
 export type FailureTypeOption = "UI" | "API" | "ASSERTION" | "TIMEOUT" | "DATA";
@@ -83,7 +84,10 @@ function parseCount(value: string, label: string): number {
   return Math.floor(n);
 }
 
-export function buildInputFromForm(form: ExecutionFormState): ExecutionReportInput {
+export function buildInputFromForm(
+  form: ExecutionFormState,
+  reportType: ExecutionReportViewType = "execution"
+): ExecutionReportInput {
   if (!form.projectName.trim()) throw new Error("Project name is required");
   if (!form.buildId.trim()) throw new Error("Build ID is required");
   if (!form.executionDate.trim()) throw new Error("Execution date is required");
@@ -107,6 +111,8 @@ export function buildInputFromForm(form: ExecutionFormState): ExecutionReportInp
       failureSeverity: r.failureSeverity,
     }));
 
+  const flags = reportTypeApiFlags(reportType);
+
   return {
     projectName: form.projectName.trim(),
     buildId: form.buildId.trim(),
@@ -122,5 +128,8 @@ export function buildInputFromForm(form: ExecutionFormState): ExecutionReportInp
     failedTests,
     pipelineName: form.pipelineName.trim() || undefined,
     branch: form.branch.trim() || undefined,
+    includeExecutiveIntelligence: flags.includeExecutiveIntelligence,
+    preferAiNarrative: flags.preferAiNarrative,
+    reportType,
   };
 }

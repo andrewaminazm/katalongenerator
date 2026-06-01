@@ -7,6 +7,13 @@ import {
 } from "../api";
 import { ExecutionReportForm } from "../components/executionReport/ExecutionReportForm";
 import { ExecutionReportPreview } from "../components/executionReport/ExecutionReportPreview";
+import { ExecutionReportTypeTabs } from "../components/executionReport/ExecutionReportTypeTabs";
+import type { ExecutionReportViewType } from "../components/executionReport/executionReportTypes";
+import {
+  EXECUTION_REPORT_TYPES,
+  getReportTypeOption,
+  reportTypePdfFilename,
+} from "../components/executionReport/executionReportTypes";
 import {
   buildInputFromForm,
   DEFAULT_FORM_STATE,
@@ -21,6 +28,7 @@ export default function ExecutionReport() {
   const { embedded } = useLayoutContext();
   const [form, setForm] = useState<ExecutionFormState>(DEFAULT_FORM_STATE);
   const [report, setReport] = useState<ExecutionReportOutput | null>(null);
+  const [reportType, setReportType] = useState<ExecutionReportViewType>("execution");
   const [loading, setLoading] = useState(false);
   const [loadingSample, setLoadingSample] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +58,7 @@ export default function ExecutionReport() {
     setLoading(true);
     setError(null);
     try {
-      const input = buildInputFromForm(form);
+      const input = buildInputFromForm(form, reportType);
       const result = await generateExecutionReport(input);
       setReport(result);
     } catch (e) {
@@ -65,12 +73,12 @@ export default function ExecutionReport() {
     setLoading(true);
     setError(null);
     try {
-      const input = buildInputFromForm(form);
+      const input = buildInputFromForm(form, reportType);
       const blob = await downloadExecutionReportPdf(input);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${input.projectName.replace(/\s+/g, "_")}_${input.buildId}-execution-report.pdf`;
+      a.download = reportTypePdfFilename(input.projectName, input.buildId, reportType);
       a.click();
       URL.revokeObjectURL(url);
       const result = await generateExecutionReport(input);
@@ -98,11 +106,13 @@ export default function ExecutionReport() {
             <strong>Load sample data</strong> to explore the workflow.
           </li>
           <li>
-            <strong>Generate report</strong> returns release readiness, module risk scores, trend charts, and
-            executive insights as JSON you can review on screen.
+            Choose a <strong>report type</strong> tab (11 formats: execution, severity, modules, flaky, executive,
+            and more), then <strong>Generate report</strong> — switch tabs anytime after generation to change the
+            view.
           </li>
           <li>
-            <strong>Download PDF</strong> saves the same report as a shareable document.
+            <strong>Download PDF</strong> exports a professional A4 document matching the{" "}
+            <strong>selected report type</strong> tab (cover page, KPIs, charts, and type-specific sections).
           </li>
         </ul>
         <p className="page-info-hint">
@@ -124,7 +134,7 @@ export default function ExecutionReport() {
           {loading ? "Working…" : "Generate report"}
         </button>
         <button type="button" className="er-btn" onClick={() => void runPdf()} disabled={loading}>
-          Download PDF
+          Download PDF ({EXECUTION_REPORT_TYPES.find((t) => t.id === reportType)?.shortLabel ?? "Report"})
         </button>
       </div>
 
@@ -136,16 +146,26 @@ export default function ExecutionReport() {
           <ExecutionReportForm form={form} onChange={setForm} disabled={loading} />
         </section>
 
-        <section className="er-panel">
-          <h2>Intelligence preview</h2>
+        <section className="er-panel er-panel--preview">
+          <div className="er-preview-header">
+            <h2>
+              {EXECUTION_REPORT_TYPES.find((t) => t.id === reportType)?.label ?? "Report"} preview
+            </h2>
+            <ExecutionReportTypeTabs value={reportType} onChange={setReportType} disabled={loading} />
+          </div>
           {!report && !loading && (
             <p className="er-form-hint">
-              Complete the form and generate a report to see executive summary, release readiness, and
-              recommendations.
+              {getReportTypeOption(reportType)?.description ??
+                "Select a report type, complete the form, and generate."}
             </p>
           )}
-          {loading && <p className="er-form-hint">Analyzing execution data…</p>}
-          {report && <ExecutionReportPreview report={report} />}
+          {loading && (
+            <p className="er-form-hint">
+              Generating{" "}
+              {EXECUTION_REPORT_TYPES.find((t) => t.id === reportType)?.shortLabel.toLowerCase()} report…
+            </p>
+          )}
+          {report && <ExecutionReportPreview report={report} reportType={reportType} />}
         </section>
       </div>
     </div>
