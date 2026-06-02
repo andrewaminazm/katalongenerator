@@ -49,10 +49,23 @@ export function stripGosiBrainCoT(content: string): string {
     .trim();
 }
 
+/**
+ * Extract the clean JWT from a token string that may contain trailing OAuth
+ * response JSON (e.g. `eyJ...abc","token_type":"Bearer",...`). A JWT signature
+ * segment matches `[A-Za-z0-9\-_]+` and contains no quotes or commas.
+ */
+function extractBearerJwt(raw: string): string {
+  // Strip "Bearer " prefix to work on the raw credential
+  const credential = raw.replace(/^Bearer\s+/i, "").trim();
+  // A JWT is exactly three base64url segments separated by dots.
+  // Anything after the third segment (non-base64url char) is junk.
+  const jwtMatch = credential.match(/^([A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)/);
+  return jwtMatch ? jwtMatch[1] : credential;
+}
+
 function normalizeAuthorizationHeader(token: string): string {
-  const t = token.trim();
-  if (/^Bearer\s+/i.test(t)) return t;
-  return `Bearer ${t}`;
+  const jwt = extractBearerJwt(token.trim());
+  return `Bearer ${jwt}`;
 }
 
 export async function gosiBrainGenerate(opts: GosiBrainOptions): Promise<{ response: string; model: string }> {
