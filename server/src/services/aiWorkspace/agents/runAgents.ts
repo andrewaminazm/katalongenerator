@@ -1,6 +1,6 @@
 import { isGosiBrainConfigured } from "../../../loadEnv.js";
 import { gosiBrainGenerate, stripGosiBrainCoT } from "../../gosiBrain.js";
-import { respondWithBuiltInIntelligence } from "../builtInChatIntelligence.js";
+import { respondWithBuiltInIntelligence, generationConfirmationResponse } from "../builtInChatIntelligence.js";
 import { analyzeProjectV2 } from "../../projectIntelligenceV2/index.js";
 import { generatePerformanceSuite } from "../../performanceEngine/index.js";
 import { runOrchestration } from "../../aiOrchestrator/index.js";
@@ -338,6 +338,12 @@ export async function runWorkspaceAgent(
     chatPayload,
     ctx.historyMessages ?? []
   );
+
+  // When we're about to generate code, replace the advisory text with a clean
+  // confirmation so the UI doesn't show a "guidance table" above the generated code.
+  if (willGenerate && m === "built-in-qa-intelligence") {
+    response = generationConfirmationResponse(message);
+  }
 
   if (willGenerate) {
     const codeMode = resolveCodeGenerationMode(message, ctx.historyMessages ?? []);

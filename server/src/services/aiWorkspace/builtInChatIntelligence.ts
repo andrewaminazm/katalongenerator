@@ -636,6 +636,37 @@ Here's how I can help:
 > "Generate a test strategy for an e-commerce app"`;
 }
 
+// ─── Generation confirmation ─────────────────────────────────────────────────
+
+/** Brief acknowledgement shown when the compiler is already generating code. */
+export function generationConfirmationResponse(message: string): string {
+  const lower = message.toLowerCase();
+
+  const type = /\bpage.?object\b/i.test(lower)
+    ? "Page Object"
+    : /\bcustom.?keyword\b/i.test(lower)
+      ? "Custom Keyword"
+      : /\bapi.?helper\b/i.test(lower)
+        ? "API Helper"
+        : /\bdb.?utility\b/i.test(lower)
+          ? "DB Utility"
+          : /\bframework.?helper\b/i.test(lower)
+            ? "Framework Helper"
+            : /\butility.?class\b/i.test(lower)
+              ? "Utility Class"
+              : "Test Script";
+
+  // Extract subject from "generate X for <subject>"
+  const subjectMatch = message.match(
+    /(?:generate|create|write|build)\s+(?:a\s+)?(?:test\s+(?:script|case)|groovy|keyword|page\s*object|script)?\s*(?:for\s+|to\s+)?(.+)$/i
+  );
+  const subject = subjectMatch?.[1]?.trim();
+
+  return `**Generating ${type}${subject ? ` — ${subject}` : ""}…**
+
+The Katalon compiler is running. The generated Groovy will appear in the panel below. Copy it directly into Katalon Studio.`;
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 
 export function respondWithBuiltInIntelligence(
