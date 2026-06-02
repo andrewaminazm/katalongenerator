@@ -2,8 +2,16 @@
  * Gosi Brain (IWAI proxy) — OpenAI-compatible chat completions with extra gateway headers.
  */
 
+export interface GosiBrainMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
 export interface GosiBrainOptions {
-  prompt: string;
+  /** Legacy single-string prompt — wrapped as a user message. */
+  prompt?: string;
+  /** Preferred: full message array with system + history + user. */
+  messages?: GosiBrainMessage[];
   model?: string;
   temperature?: number;
   /** Full value for Authorization header, usually "Bearer eyJ..." */
@@ -90,12 +98,18 @@ export async function gosiBrainGenerate(opts: GosiBrainOptions): Promise<{ respo
 
   const model = opts.model?.trim() || modelDefault;
 
+  // Build message array — prefer explicit messages[], fall back to prompt string
+  const messages: GosiBrainMessage[] =
+    opts.messages && opts.messages.length > 0
+      ? opts.messages
+      : [{ role: "user", content: opts.prompt ?? "" }];
+
   // Debug: log masked token prefix and body size to help diagnose WAF rejections
   const jwtPreview = authHeader.replace(/^Bearer\s+/i, "").slice(0, 20);
   const bodyPayload = JSON.stringify({
     model,
-    messages: [{ role: "user", content: opts.prompt }],
-    temperature: opts.temperature ?? 0.7,
+    messages,
+    temperature: opts.temperature ?? 0.4,
     max_tokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 16000,
     stream: false,
   });

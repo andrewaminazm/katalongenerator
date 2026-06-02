@@ -411,7 +411,7 @@ WS.verifyResponseStatusCode(response, 200)
 WS.verifyElementPropertyValue(response, 'data.token', GlobalVariable.expectedToken)
 
 // Assert response time
-assert response.waitingTime < 2000 : "Response too slow: ${response.waitingTime}ms"
+assert response.waitingTime < 2000 : "Response too slow: \${response.waitingTime}ms"
 \`\`\`
 
 ### Authentication Patterns

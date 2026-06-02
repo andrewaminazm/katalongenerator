@@ -1,17 +1,15 @@
 import { isGosiBrainConfigured } from "../../../loadEnv.js";
 import { gosiBrainGenerate, stripGosiBrainCoT } from "../../gosiBrain.js";
+import { buildGosiBrainMessages } from "../gosiBrainPromptBuilder.js";
 import { respondWithBuiltInIntelligence, generationConfirmationResponse } from "../builtInChatIntelligence.js";
 import { analyzeProjectV2 } from "../../projectIntelligenceV2/index.js";
 import { generatePerformanceSuite } from "../../performanceEngine/index.js";
 import { runOrchestration } from "../../aiOrchestrator/index.js";
 import type { EnrichedWorkspaceContext } from "../contextManager.js";
-import { buildSystemContextBlock } from "../contextManager.js";
-import { TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER } from "../testArchitectChatPrompt.js";
 import type { RoutedIntent } from "../intentRouter.js";
 import { isProjectReviewRequest } from "../intentRouter.js";
 import {
   formatDetectedIntentBlock,
-  buildSeniorQaUnifiedTask,
   containsForbiddenPlaceholderCode,
 } from "../generationReadiness.js";
 import {
@@ -22,8 +20,6 @@ import {
   wantsKatalonScriptGeneration,
 } from "../workspaceScriptGeneration.js";
 import { buildQaEvidencePack, evidenceGatherFlags } from "../qaEvidencePack.js";
-import { selectQaAgentsForRequest } from "../qaOrchestratorAgents.js";
-import { SENIOR_QA_ENGINEER_NAME } from "../testArchitectChatPrompt.js";
 import type {
   WorkspaceAction,
   WorkspaceChatRequest,
@@ -41,80 +37,53 @@ export interface AgentRunResult {
   warnings?: string[];
 }
 
-async function advisoryReply(
-  message: string,
-  ctx: EnrichedWorkspaceContext,
-  token: string | undefined,
-  model: string | undefined,
-  extra?: string,
-  intent?: import("../types.js").WorkspaceIntent,
-  confidence?: number
-): Promise<{ response: string; model: string }> {
-  // Try Gosi Brain if configured and token available
-  if (isGosiBrainConfigured() && token?.trim()) {
-    try {
-      const prompt = `${buildSystemContextBlock(ctx)}
-
-User request:
-${message}
-
-${extra ? `Task context:\n${extra}` : ""}
-
-${TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER}`;
-
-      const { response, model: used } = await gosiBrainGenerate({
-        prompt,
-        authorizationToken: token,
-        model,
-        temperature: 0.35,
-      });
-      return { response: stripGosiBrainCoT(response), model: used };
-    } catch {
-      // Fall through to built-in intelligence on any Gosi Brain failure
-    }
-  }
-
-  // Built-in intelligence — works without any external LLM
-  const builtInResponse = respondWithBuiltInIntelligence(
-    message,
-    intent ?? "unknown",
-    confidence ?? 0.5
-  );
-  return { response: builtInResponse, model: "built-in-qa-intelligence" };
-}
-
-function offlineSeniorQaFallback(
-  message: string,
-  intent: RoutedIntent["intent"],
-  confidence: number,
-  _platform: string,
-  _projectId?: string
-): string {
-  return respondWithBuiltInIntelligence(message, intent, confidence);
-}
-
-async function seniorQaAnalysisReply(
+/**
+ * Call Gosi Brain with a proper system + history + user messages array,
+ * adapted to the request type (generation / analysis / question / greeting).
+ * Falls back to built-in intelligence if Gosi Brain is unavailable or fails.
+ */
+async function adaptiveGosiBrainReply(
   message: string,
   ctx: EnrichedWorkspaceContext,
   route: RoutedIntent,
   token: string | undefined,
   model: string | undefined,
-  task: string
+  options: {
+    willGenerate: boolean;
+    supplementaryContext?: string;
+  }
 ): Promise<{ response: string; model: string }> {
-  if (!isGosiBrainConfigured() || !token?.trim()) {
-    return {
-      response: offlineSeniorQaFallback(
+  if (isGosiBrainConfigured() && token?.trim()) {
+    try {
+      const messages = buildGosiBrainMessages({
         message,
-        route.intent,
-        route.confidence,
-        ctx.payload.platform ?? "web",
-        ctx.payload.projectId
-      ),
-      model: "workspace-senior-qa-offline",
-    };
+        ctx,
+        route,
+        willGenerate: options.willGenerate,
+        supplementaryContext: options.supplementaryContext,
+      });
+
+      const { response, model: used } = await gosiBrainGenerate({
+        messages,
+        authorizationToken: token,
+        model,
+        temperature: options.willGenerate ? 0.2 : 0.4,
+      });
+      return { response: stripGosiBrainCoT(response), model: used };
+    } catch (err) {
+      console.warn("[GosiBrain] Falling back to built-in intelligence:", err instanceof Error ? err.message : err);
+      // Fall through to built-in intelligence
+    }
   }
 
-  return advisoryReply(message, ctx, token, model, task, route.intent, route.confidence);
+  // Built-in intelligence — works without any external LLM
+  if (options.willGenerate) {
+    return { response: generationConfirmationResponse(message), model: "built-in-qa-intelligence" };
+  }
+  return {
+    response: respondWithBuiltInIntelligence(message, route.intent, route.confidence),
+    model: "built-in-qa-intelligence",
+  };
 }
 
 interface SupplementaryContext {
@@ -257,7 +226,7 @@ function chatSuggestions(
   return [...new Set(s)].slice(0, 4);
 }
 
-/** Test Architect Chat — every message is Senior QA analysis first. */
+/** Test Architect Chat — adaptive QA intelligence via Gosi Brain or built-in fallback. */
 export async function runWorkspaceAgent(
   route: RoutedIntent,
   message: string,
@@ -268,17 +237,27 @@ export async function runWorkspaceAgent(
   const token = req.authorizationToken;
   const model = req.model;
 
+  route.agent = "qa_advisor";
+
+  // ── Step 1: Compute generation intent FIRST so Gosi Brain knows the context ──
+  const steps = collectGenerationSteps(message, ctx.historyMessages ?? []);
+  const chatPayload = enrichPayloadFromChat(message, ctx.historyMessages ?? [], payload);
+  const willGenerate = wantsKatalonScriptGeneration(
+    route,
+    message,
+    steps,
+    chatPayload,
+    ctx.historyMessages ?? []
+  );
+
+  // ── Step 2: Gather supplementary evidence (project analysis, perf suite etc.) ──
   const wantsProjectAnalysis =
     route.intent === "analyze" || isProjectReviewRequest(message);
-
-  route.agent = "qa_advisor";
 
   let evidenceFlags = evidenceGatherFlags(route, message, payload.projectId);
   if (wantsProjectAnalysis) {
     evidenceFlags = { ...evidenceFlags, includeProjectAnalyze: false };
   }
-  const agents = selectQaAgentsForRequest(route, message);
-
   const [supplementary, evidencePack] = await Promise.all([
     gatherSupplementaryContext(route, message, payload),
     buildQaEvidencePack({
@@ -291,60 +270,31 @@ export async function runWorkspaceAgent(
     }),
   ]);
 
-  const wantsPerf =
-    route.intent === "performance" &&
-    Boolean(payload.swagger?.trim() || payload.postmanCollection?.trim());
-
   const combinedContext = [evidencePack, supplementary.text].filter(Boolean).join("\n\n");
 
-  const task = buildSeniorQaUnifiedTask(
-    message,
-    route.intent,
-    route.confidence,
-    payload.platform ?? "web",
-    payload,
-    combinedContext || undefined,
-    route,
-    {
-      agents,
-      backendInvoked: {
-        projectAnalysis: wantsProjectAnalysis && Boolean(payload.projectId),
-        performanceSuite: wantsPerf,
-      },
-    }
-  );
-
-  const { response: qaResponse, model: m } = await seniorQaAnalysisReply(
+  // ── Step 3: Call Gosi Brain (or built-in fallback) with full context ──
+  const { response: rawResponse, model: m } = await adaptiveGosiBrainReply(
     message,
     ctx,
     route,
     token,
     model,
-    task
+    {
+      willGenerate,
+      supplementaryContext: combinedContext || undefined,
+    }
   );
 
-  const steps = collectGenerationSteps(message, ctx.historyMessages ?? []);
-  const chatPayload = enrichPayloadFromChat(message, ctx.historyMessages ?? [], payload);
+  // ── Step 4: Tag response with detected intent block for the UI ──
+  const intentBlock = formatDetectedIntentBlock(route.intent, route.confidence);
+  let response = intentBlock ? `${intentBlock}\n\n${rawResponse}` : rawResponse;
+
   const generatedAssets = [...supplementary.assets];
   const warnings = [...supplementary.warnings];
-  let response = qaResponse;
   let code: string | undefined;
-  const actions: WorkspaceAction[] = [{ type: "advisory", label: "QA Orchestrator analysis" }];
+  const actions: WorkspaceAction[] = [{ type: "advisory", label: "QA analysis" }];
 
-  const willGenerate = wantsKatalonScriptGeneration(
-    route,
-    message,
-    steps,
-    chatPayload,
-    ctx.historyMessages ?? []
-  );
-
-  // When we're about to generate code, replace the advisory text with a clean
-  // confirmation so the UI doesn't show a "guidance table" above the generated code.
-  if (willGenerate && m === "built-in-qa-intelligence") {
-    response = generationConfirmationResponse(message);
-  }
-
+  // ── Step 5: Run Katalon compiler when user wants code ──
   if (willGenerate) {
     const codeMode = resolveCodeGenerationMode(message, ctx.historyMessages ?? []);
     try {
@@ -378,13 +328,14 @@ export async function runWorkspaceAgent(
           type: "generate",
           label: `Katalon ${codeMode === "auto" ? "script" : codeMode.replace(/_/g, " ")}`,
         });
+        // Append artifact pointer only if the advisory didn't already mention it
         if (!response.includes("GENERATED ARTIFACTS") && !response.includes("Generated Groovy")) {
-          response += `\n\n---\n### 6. GENERATED ARTIFACTS\n**Automation Agent** — Katalon output (**${codeMode.replace(/_/g, " ")}**) is in the expandable Groovy block below (same compiler as Manual). Copy into Katalon Studio after review.\n`;
+          response += `\n\n---\nKatalon **${codeMode.replace(/_/g, " ")}** generated — see the expandable Groovy block below. Copy into Katalon Studio after review.`;
         }
         if (orch.warnings?.length) warnings.push(...orch.warnings);
       } else if (groovy && containsForbiddenPlaceholderCode(groovy)) {
         warnings.push(
-          "Script compiler produced placeholder steps — add clearer step lines in chat or the Context panel."
+          "Script compiler produced placeholder steps — add clearer step lines in chat or use the Context panel to set URL and locators."
         );
       }
     } catch (e) {
