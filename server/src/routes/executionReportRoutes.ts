@@ -91,21 +91,24 @@ export function sampleExecutionInput(): ExecutionReportInput {
     },
     failedTests: [
       {
-        testCaseName: "LoginTest",
+        bugName: "Login fails when username has spaces",
+        jiraId: "AUTH-1234",
         module: "Authentication",
         errorMessage: "Element not found: btn_Login",
         failureType: "UI",
         failureSeverity: "CRITICAL",
       },
       {
-        testCaseName: "CheckoutPayment",
+        bugName: "Checkout payment returns 500",
+        jiraId: "PAY-900",
         module: "Payment",
         errorMessage: "API returned 500 on charge",
         failureType: "API",
         failureSeverity: "CRITICAL",
       },
       {
-        testCaseName: "CartAddItem",
+        bugName: "Add to cart times out on overlay",
+        jiraId: "CHK-210",
         module: "Checkout",
         errorMessage: "Timeout waiting for cart overlay",
         failureType: "TIMEOUT",

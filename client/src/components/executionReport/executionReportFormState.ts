@@ -6,9 +6,9 @@ export type FailureTypeOption = "UI" | "API" | "ASSERTION" | "TIMEOUT" | "DATA";
 
 export interface FailureRowState {
   id: string;
-  testCaseName: string;
+  bugName: string;
+  jiraId: string;
   module: string;
-  errorMessage: string;
   failureType: FailureTypeOption;
   failureSeverity: FailureSeverityOption;
 }
@@ -30,9 +30,9 @@ export interface ExecutionFormState {
 
 export const EMPTY_FAILURE_ROW = (): FailureRowState => ({
   id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-  testCaseName: "",
+  bugName: "",
+  jiraId: "",
   module: "",
-  errorMessage: "",
   failureType: "UI",
   failureSeverity: "HIGH",
 });
@@ -67,9 +67,9 @@ export function formStateFromSample(sample: ExecutionReportInput): ExecutionForm
     branch: sample.branch ?? "",
     failureRows: (sample.failedTests ?? []).map((t) => ({
       id: `row-${Math.random().toString(36).slice(2, 8)}`,
-      testCaseName: t.testCaseName,
+      bugName: (t as unknown as { bugName?: string }).bugName ?? t.testCaseName ?? "",
+      jiraId: (t as unknown as { jiraId?: string }).jiraId ?? t.errorMessage ?? "",
       module: t.module,
-      errorMessage: t.errorMessage,
       failureType: (t.failureType?.toUpperCase() as FailureTypeOption) || "UI",
       failureSeverity: (t.failureSeverity?.toUpperCase() as FailureSeverityOption) || "HIGH",
     })),
@@ -102,11 +102,15 @@ export function buildInputFromForm(
   }
 
   const failedTests = form.failureRows
-    .filter((r) => r.testCaseName.trim() || r.errorMessage.trim())
+    .filter((r) => r.bugName.trim() || r.jiraId.trim())
     .map((r) => ({
-      testCaseName: r.testCaseName.trim() || "Unnamed test",
+      // Preferred API fields
+      bugName: r.bugName.trim() || "Unnamed bug",
+      jiraId: r.jiraId.trim() || undefined,
+      // Backward-compatible fields (server still accepts these)
+      testCaseName: r.bugName.trim() || "Unnamed bug",
       module: r.module.trim() || "General",
-      errorMessage: r.errorMessage.trim() || "No error message provided",
+      errorMessage: undefined,
       failureType: r.failureType,
       failureSeverity: r.failureSeverity,
     }));

@@ -1744,9 +1744,15 @@ export interface ExecutionReportInput {
     duration: string;
   };
   failedTests: Array<{
-    testCaseName: string;
+    /** Preferred: human-readable bug title */
+    bugName?: string;
+    /** Preferred: Jira issue key/id */
+    jiraId?: string;
+    /** Legacy: test-case name (still accepted by server) */
+    testCaseName?: string;
     module: string;
-    errorMessage: string;
+    /** Optional technical error details */
+    errorMessage?: string;
     failureType?: string;
     failureSeverity?: string;
     stackTraceSummary?: string;

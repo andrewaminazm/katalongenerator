@@ -8,11 +8,12 @@ export function buildChartData(
   modules: ModuleRiskRow[],
   stabilityScore: number,
   enriched: Array<{
-    testCaseName: string;
+    bugName: string;
+    jiraId?: string;
     module: string;
     failureSeverity: FailureSeverity;
     failureType: string;
-    errorMessage: string;
+    errorMessage?: string;
   }>
 ): ChartDataSet {
   return {
@@ -36,11 +37,12 @@ export function buildChartData(
       { label: "Current run", stabilityScore },
     ],
     failedTestsTable: enriched.map((t) => ({
-      testCaseName: t.testCaseName,
+      bugName: t.bugName,
+      jiraId: t.jiraId,
       module: t.module,
       severity: t.failureSeverity,
       failureType: t.failureType,
-      errorMessage: t.errorMessage.slice(0, 120),
+      errorMessage: t.errorMessage ? t.errorMessage.slice(0, 120) : undefined,
     })),
   };
 }

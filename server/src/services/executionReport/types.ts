@@ -12,9 +12,21 @@ export type FailureType =
 export type ReleaseStatus = "READY" | "AT_RISK" | "BLOCKED";
 
 export interface FailedTestInput {
-  testCaseName: string;
+  /**
+   * Preferred: human-readable bug title (e.g. "Login fails when username has spaces").
+   * If not provided, `testCaseName` is used as a fallback for backwards compatibility.
+   */
+  bugName?: string;
+  /** Preferred: Jira issue key/id (e.g. "AUTH-1234"). */
+  jiraId?: string;
+  /** Backwards-compatible field (legacy). */
+  testCaseName?: string;
   module: string;
-  errorMessage: string;
+  /**
+   * Optional. Keep for real technical failure details when available.
+   * If client only provides Jira, this can be empty.
+   */
+  errorMessage?: string;
   failureType?: FailureType | string;
   failureSeverity?: FailureSeverity | string;
   stackTraceSummary?: string;
@@ -97,9 +109,10 @@ export interface SeverityAnalysis {
   weightedRiskPoints: number;
   topFailingModules: Array<{ module: string; count: number; maxSeverity: FailureSeverity }>;
   criticalFailures: Array<{
-    testCaseName: string;
+    bugName: string;
+    jiraId?: string;
     module: string;
-    errorMessage: string;
+    errorMessage?: string;
     severity: FailureSeverity;
   }>;
 }
@@ -147,11 +160,12 @@ export interface ChartDataSet {
   moduleRiskHeatmap: { module: string; riskScore: number; failures: number }[];
   stabilityTrendLine: { label: string; stabilityScore: number }[];
   failedTestsTable: Array<{
-    testCaseName: string;
+    bugName: string;
+    jiraId?: string;
     module: string;
     severity: FailureSeverity;
     failureType: string;
-    errorMessage: string;
+    errorMessage?: string;
   }>;
 }
 

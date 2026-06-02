@@ -24,9 +24,12 @@ export function ExecutionReportFailuresView({ report }: { report: ExecutionRepor
               </p>
               <ul className="er-cluster-tests">
                 {c.tests.map((t) => (
-                  <li key={`${t.testCaseName}-${t.severity}`}>
-                    <strong>{t.testCaseName}</strong> ({t.severity}) — {t.errorMessage.slice(0, 120)}
-                    {t.errorMessage.length > 120 ? "…" : ""}
+                  <li key={`${t.bugName}-${t.severity}`}>
+                    <strong>{t.bugName}</strong> ({t.severity})
+                    {t.jiraId ? ` — Jira: ${t.jiraId}` : ""}
+                    {t.errorMessage
+                      ? ` — ${t.errorMessage.slice(0, 120)}${t.errorMessage.length > 120 ? "…" : ""}`
+                      : ""}
                   </li>
                 ))}
               </ul>

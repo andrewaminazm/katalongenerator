@@ -146,16 +146,16 @@ export function ExecutionReportForm({ form, onChange, disabled }: Props) {
 
         {form.failureRows.length === 0 ? (
           <p className="er-form-hint">
-            Add rows for failed test cases. Leave empty if the run had zero failures.
+            Add rows for bugs found in this execution. Leave empty if the run had zero failures.
           </p>
         ) : (
           <div className="er-failures-table-wrap">
             <table className="er-failures-table">
               <thead>
                 <tr>
-                  <th>Test case</th>
+                  <th>Bug name</th>
+                  <th>Jira ID</th>
                   <th>Module</th>
-                  <th>Error message</th>
                   <th>Type</th>
                   <th>Severity</th>
                   <th aria-label="Actions" />
@@ -167,9 +167,17 @@ export function ExecutionReportForm({ form, onChange, disabled }: Props) {
                     <td>
                       <input
                         type="text"
-                        value={row.testCaseName}
-                        onChange={(e) => updateRow(row.id, { testCaseName: e.target.value })}
-                        placeholder="LoginTest"
+                        value={row.bugName}
+                        onChange={(e) => updateRow(row.id, { bugName: e.target.value })}
+                        placeholder="Login fails when username has spaces"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={row.jiraId}
+                        onChange={(e) => updateRow(row.id, { jiraId: e.target.value })}
+                        placeholder="AUTH-1234"
                       />
                     </td>
                     <td>
@@ -178,14 +186,6 @@ export function ExecutionReportForm({ form, onChange, disabled }: Props) {
                         value={row.module}
                         onChange={(e) => updateRow(row.id, { module: e.target.value })}
                         placeholder="Authentication"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={row.errorMessage}
-                        onChange={(e) => updateRow(row.id, { errorMessage: e.target.value })}
-                        placeholder="Element not found"
                       />
                     </td>
                     <td>

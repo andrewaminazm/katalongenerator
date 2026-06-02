@@ -132,10 +132,11 @@ function renderSeverityBody(report: ExecutionReportOutput): string {
   const crit = report.severityAnalysis.criticalFailures
     .map(
       (c) => `<tr>
-        <td>${esc(c.testCaseName)}</td>
+        <td>${esc(c.bugName)}</td>
+        <td>${esc(c.jiraId ?? "")}</td>
         <td>${esc(c.module)}</td>
         <td><span class="pill ${sevClass(c.severity)}">${esc(c.severity)}</span></td>
-        <td class="err-msg">${esc(c.errorMessage)}</td>
+        <td class="err-msg">${esc(c.errorMessage ?? "")}</td>
       </tr>`
     )
     .join("");
@@ -170,7 +171,7 @@ function renderSeverityBody(report: ExecutionReportOutput): string {
     ${
       crit
         ? `<h4 style="margin:16px 0 8px">Critical &amp; high failures</h4>
-        <table class="data"><thead><tr><th>Test</th><th>Module</th><th>Severity</th><th>Error</th></tr></thead><tbody>${crit}</tbody></table>`
+        <table class="data"><thead><tr><th>Bug</th><th>Jira</th><th>Module</th><th>Severity</th><th>Error</th></tr></thead><tbody>${crit}</tbody></table>`
         : '<p class="muted">No critical failures in this snapshot.</p>'
     }
   </section>`;
@@ -183,7 +184,12 @@ function renderFailuresBody(report: ExecutionReportOutput): string {
       (c) => `<div class="cluster-card">
         <h4>${esc(c.module)} — ${c.count} failure(s)</h4>
         <p class="muted">Impact: ${c.count >= 3 ? "High" : c.count >= 2 ? "Medium" : "Low"}</p>
-        <ul>${c.tests.map((t) => `<li><strong>${esc(t.testCaseName)}</strong> (${esc(t.severity)}): ${esc(t.errorMessage.slice(0, 100))}</li>`).join("")}</ul>
+        <ul>${c.tests
+          .map(
+            (t) =>
+              `<li><strong>${esc(t.bugName)}</strong> (${esc(t.severity)})${t.jiraId ? ` — Jira: ${esc(t.jiraId)}` : ""}${t.errorMessage ? ` — ${esc(t.errorMessage.slice(0, 100))}` : ""}</li>`
+          )
+          .join("")}</ul>
       </div>`
     )
     .join("");

@@ -93,7 +93,7 @@ function mapFailureTypeToRootCause(
     "Configuration Issues": 0,
   };
   for (const t of tests ?? []) {
-    const msg = (t.errorMessage + (t.stackTraceSummary ?? "")).toLowerCase();
+    const msg = (`${t.errorMessage ?? ""}${t.stackTraceSummary ?? ""}`).toLowerCase();
     const type = String(t.failureType ?? "").toUpperCase();
     if (type === "UI" || /element not found|locator|selector|xpath/i.test(msg)) {
       buckets["Locator Issues"]!++;

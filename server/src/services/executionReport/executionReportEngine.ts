@@ -60,7 +60,8 @@ export function generateExecutionReport(input: ExecutionReportInput): ExecutionR
     .filter((t) => t.failureSeverity === "CRITICAL" || t.failureSeverity === "HIGH")
     .slice(0, 15)
     .map((t) => ({
-      testCaseName: t.testCaseName,
+      bugName: t.bugName ?? t.testCaseName ?? "Unnamed bug",
+      jiraId: t.jiraId,
       module: t.module,
       errorMessage: t.errorMessage,
       severity: t.failureSeverity,

@@ -18,7 +18,7 @@ export function normalizeSeverity(raw?: string): FailureSeverity {
 export function inferSeverity(test: FailedTestInput): FailureSeverity {
   if (test.failureSeverity) return normalizeSeverity(test.failureSeverity);
 
-  const msg = `${test.errorMessage} ${test.module} ${test.testCaseName}`.toLowerCase();
+  const msg = `${test.errorMessage ?? ""} ${test.jiraId ?? ""} ${test.module} ${test.bugName ?? test.testCaseName ?? ""}`.toLowerCase();
   if (/payment|checkout|auth|login|security|production|blocker/.test(msg)) return "CRITICAL";
   if (/timeout|not found|element|api 5|500|assertion failed/.test(msg)) return "HIGH";
   if (/flaky|intermittent|stale|retry/.test(msg)) return "MEDIUM";
@@ -30,7 +30,7 @@ export function inferFailureType(test: FailedTestInput): FailureType {
   if (raw === "UI" || raw === "API" || raw === "ASSERTION" || raw === "TIMEOUT" || raw === "DATA") {
     return raw as FailureType;
   }
-  const msg = test.errorMessage.toLowerCase();
+  const msg = String(test.errorMessage ?? "").toLowerCase();
   if (/api|status|401|403|404|500|rest|json/.test(msg)) return "API";
   if (/assert|verify|expected/.test(msg)) return "ASSERTION";
   if (/timeout|timed out|wait/.test(msg)) return "TIMEOUT";
@@ -40,10 +40,19 @@ export function inferFailureType(test: FailedTestInput): FailureType {
 }
 
 export function enrichFailedTests(tests: FailedTestInput[]): Array<
-  FailedTestInput & { failureSeverity: FailureSeverity; failureType: FailureType }
+  FailedTestInput & {
+    bugName: string;
+    jiraId?: string;
+    errorMessage?: string;
+    failureSeverity: FailureSeverity;
+    failureType: FailureType;
+  }
 > {
   return tests.map((t) => ({
     ...t,
+    bugName: t.bugName ?? t.testCaseName ?? "Unnamed bug",
+    jiraId: t.jiraId ?? undefined,
+    testCaseName: t.testCaseName ?? t.bugName ?? "Unnamed test",
     failureSeverity: inferSeverity(t),
     failureType: inferFailureType(t),
   }));

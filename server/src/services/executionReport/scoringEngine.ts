@@ -78,7 +78,7 @@ export function computeReleaseReadiness(
 }
 
 export function countCriticalPathFailures(
-  tests: Array<{ module: string; testCaseName: string; failureSeverity: FailureSeverity }>
+  tests: Array<{ module: string; bugName: string; failureSeverity: FailureSeverity }>
 ): number {
   const criticalRe = /payment|checkout|auth|login|order|billing/i;
   return tests.filter(
@@ -86,6 +86,6 @@ export function countCriticalPathFailures(
       t.failureSeverity === "CRITICAL" ||
       t.failureSeverity === "HIGH" ||
       criticalRe.test(t.module) ||
-      criticalRe.test(t.testCaseName)
+      criticalRe.test(t.bugName)
   ).length;
 }

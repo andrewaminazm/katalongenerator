@@ -80,7 +80,9 @@ export function reportToMarkdown(report: ExecutionReportOutput): string {
   if (report.severityAnalysis.criticalFailures.length > 0) {
     lines.push("### Critical failures", "");
     for (const c of report.severityAnalysis.criticalFailures) {
-      lines.push(`- **${c.testCaseName}** (${c.module}): ${c.errorMessage.slice(0, 100)}`);
+      const jira = c.jiraId ? ` — Jira: ${c.jiraId}` : "";
+      const err = c.errorMessage ? ` — ${c.errorMessage.slice(0, 100)}` : "";
+      lines.push(`- **${c.bugName}** (${c.module})${jira}${err}`);
     }
     lines.push("");
   }

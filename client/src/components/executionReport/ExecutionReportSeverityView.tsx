@@ -67,7 +67,8 @@ export function ExecutionReportSeverityView({ report }: { report: ExecutionRepor
           <table className="er-data-table">
             <thead>
               <tr>
-                <th>Test</th>
+                <th>Bug</th>
+                <th>Jira</th>
                 <th>Module</th>
                 <th>Severity</th>
                 <th>Error</th>
@@ -75,11 +76,12 @@ export function ExecutionReportSeverityView({ report }: { report: ExecutionRepor
             </thead>
             <tbody>
               {analysis.criticalFailures.map((c) => (
-                <tr key={`${c.testCaseName}-${c.module}`}>
-                  <td>{c.testCaseName}</td>
+                <tr key={`${c.bugName}-${c.module}`}>
+                  <td>{c.bugName}</td>
+                  <td>{c.jiraId ?? ""}</td>
                   <td>{c.module}</td>
                   <td>{c.severity}</td>
-                  <td className="er-cell-error">{c.errorMessage}</td>
+                  <td className="er-cell-error">{c.errorMessage ?? ""}</td>
                 </tr>
               ))}
             </tbody>

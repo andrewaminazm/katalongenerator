@@ -27,9 +27,10 @@ export interface SeverityAnalysisData {
   weightedRiskPoints: number;
   topFailingModules: Array<{ module: string; count: number; maxSeverity: string }>;
   criticalFailures: Array<{
-    testCaseName: string;
+    bugName: string;
+    jiraId?: string;
     module: string;
-    errorMessage: string;
+    errorMessage?: string;
     severity: string;
   }>;
 }
@@ -39,11 +40,12 @@ export interface ChartDataParsed {
   severityBar: Array<{ severity: string; count: number; weight: number }>;
   moduleRiskHeatmap: Array<{ module: string; riskScore: number; failures: number }>;
   failedTestsTable: Array<{
-    testCaseName: string;
+    bugName: string;
+    jiraId?: string;
     module: string;
     severity: string;
     failureType: string;
-    errorMessage: string;
+    errorMessage?: string;
   }>;
 }
 

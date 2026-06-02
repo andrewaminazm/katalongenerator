@@ -2,11 +2,11 @@ import type { FailureType, FlakyInsights, RootCauseInsight } from "./types.js";
 import type { FailureSeverity } from "./types.js";
 
 export function buildFlakyInsights(
-  tests: Array<{ testCaseName: string; errorMessage: string; failureSeverity: FailureSeverity }>
+  tests: Array<{ bugName: string; errorMessage?: string; failureSeverity: FailureSeverity }>
 ): FlakyInsights {
   const repeated = new Map<string, number>();
   for (const t of tests) {
-    const key = t.testCaseName.toLowerCase();
+    const key = t.bugName.toLowerCase();
     repeated.set(key, (repeated.get(key) ?? 0) + 1);
   }
 
@@ -19,14 +19,14 @@ export function buildFlakyInsights(
       (t) =>
         t.failureSeverity === "LOW" ||
         t.failureSeverity === "MEDIUM" ||
-        /flaky|stale|intermittent|timeout/i.test(t.errorMessage)
+        /flaky|stale|intermittent|timeout/i.test(String(t.errorMessage ?? ""))
     )
-    .map((t) => t.testCaseName)
+    .map((t) => t.bugName)
     .slice(0, 10);
 
   const regressionSignals: string[] = [];
   if (tests.length >= 5) regressionSignals.push("Failure volume suggests regression in latest build");
-  if (tests.some((t) => /payment|checkout/i.test(t.testCaseName))) {
+  if (tests.some((t) => /payment|checkout/i.test(t.bugName))) {
     regressionSignals.push("Commerce path failures — compare with previous green build");
   }
 
@@ -39,7 +39,7 @@ export function buildFlakyInsights(
 }
 
 export function buildRootCauseInsights(
-  tests: Array<{ failureType: FailureType; errorMessage: string; module: string }>
+  tests: Array<{ failureType: FailureType; errorMessage?: string; module: string }>
 ): RootCauseInsight[] {
   const byType = new Map<FailureType, number>();
   for (const t of tests) byType.set(t.failureType, (byType.get(t.failureType) ?? 0) + 1);
@@ -73,7 +73,7 @@ export function buildRootCauseInsights(
     });
   }
 
-  if (tests.some((t) => /environment|503|connection/i.test(t.errorMessage))) {
+  if (tests.some((t) => /environment|503|connection/i.test(String(t.errorMessage ?? "")))) {
     insights.push({
       category: "Environment",
       likelihood: "medium",

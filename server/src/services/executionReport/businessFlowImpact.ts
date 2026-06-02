@@ -12,13 +12,13 @@ const FLOWS: Array<{ name: string; pattern: RegExp }> = [
 
 export function analyzeBusinessFlowImpact(
   exec: { totalTestCases: number; passed: number; failed: number },
-  tests: Array<{ testCaseName: string; module: string; failureSeverity: FailureSeverity }>
+  tests: Array<{ bugName: string; module: string; failureSeverity: FailureSeverity }>
 ): BusinessFlowRow[] {
   const passBase = exec.totalTestCases > 0 ? (exec.passed / exec.totalTestCases) * 100 : 100;
 
   return FLOWS.map((flow) => {
     const related = tests.filter(
-      (t) => flow.pattern.test(t.testCaseName) || flow.pattern.test(t.module)
+      (t) => flow.pattern.test(t.bugName) || flow.pattern.test(t.module)
     );
     const failCount = related.length;
     const riskScore = Math.min(
@@ -34,7 +34,7 @@ export function analyzeBusinessFlowImpact(
       flowName: flow.name,
       passRatePercent,
       riskScore,
-      failedTests: related.map((t) => t.testCaseName).slice(0, 8),
+      failedTests: related.map((t) => t.bugName).slice(0, 8),
       impact:
         failCount === 0
           ? "No failures mapped to this flow in this run."
