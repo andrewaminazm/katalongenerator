@@ -1,5 +1,6 @@
 import { isGosiBrainConfigured } from "../../../loadEnv.js";
 import { gosiBrainGenerate, stripGosiBrainCoT } from "../../gosiBrain.js";
+import { respondWithBuiltInIntelligence } from "../builtInChatIntelligence.js";
 import { analyzeProjectV2 } from "../../projectIntelligenceV2/index.js";
 import { generatePerformanceSuite } from "../../performanceEngine/index.js";
 import { runOrchestration } from "../../aiOrchestrator/index.js";
@@ -45,17 +46,14 @@ async function advisoryReply(
   ctx: EnrichedWorkspaceContext,
   token: string | undefined,
   model: string | undefined,
-  extra?: string
+  extra?: string,
+  intent?: import("../types.js").WorkspaceIntent,
+  confidence?: number
 ): Promise<{ response: string; model: string }> {
-  if (!isGosiBrainConfigured() || !token?.trim()) {
-    return {
-      response:
-        extra ??
-        `**Advisory (offline)**\n\n${message}\n\nConfigure Gosi Brain on the server or pass an authorization token to enable full Senior QA Engineer responses.`,
-      model: "workspace-advisory",
-    };
-  }
-  const prompt = `${buildSystemContextBlock(ctx)}
+  // Try Gosi Brain if configured and token available
+  if (isGosiBrainConfigured() && token?.trim()) {
+    try {
+      const prompt = `${buildSystemContextBlock(ctx)}
 
 User request:
 ${message}
@@ -64,51 +62,35 @@ ${extra ? `Task context:\n${extra}` : ""}
 
 ${TEST_ARCHITECT_RESPONSE_FORMAT_REMINDER}`;
 
-  const { response, model: used } = await gosiBrainGenerate({
-    prompt,
-    authorizationToken: token,
-    model,
-    temperature: 0.35,
-  });
-  return { response: stripGosiBrainCoT(response), model: used };
+      const { response, model: used } = await gosiBrainGenerate({
+        prompt,
+        authorizationToken: token,
+        model,
+        temperature: 0.35,
+      });
+      return { response: stripGosiBrainCoT(response), model: used };
+    } catch {
+      // Fall through to built-in intelligence on any Gosi Brain failure
+    }
+  }
+
+  // Built-in intelligence — works without any external LLM
+  const builtInResponse = respondWithBuiltInIntelligence(
+    message,
+    intent ?? "unknown",
+    confidence ?? 0.5
+  );
+  return { response: builtInResponse, model: "built-in-qa-intelligence" };
 }
 
 function offlineSeniorQaFallback(
   message: string,
   intent: RoutedIntent["intent"],
   confidence: number,
-  platform: string,
-  projectId?: string
+  _platform: string,
+  _projectId?: string
 ): string {
-  return `${formatDetectedIntentBlock(intent, confidence)}
-
-### 1. EXECUTIVE QA SUMMARY
-**Status:** AT RISK — Gosi Brain is not configured or no auth token was provided; multi-agent orchestration is unavailable offline.
-
-You asked: "${message}".
-
-### 2. QA HEALTH DASHBOARD
-- **Coverage:** Unknown — Confidence: 0% — Insufficient evidence (offline).
-- **Stability:** Unknown — Confidence: 0% — Insufficient evidence.
-- **Automation Quality:** Unknown — Confidence: 0% — Insufficient evidence.
-- **Flakiness:** Unknown — Confidence: 0% — Insufficient evidence.
-- **Release Readiness:** Unknown — Confidence: 0% — Insufficient evidence.
-
-### 3. AGENT FINDINGS
-- **Test Architect Agent:** Clarify goal, platform (**${platform}**), and scope before automation.
-${projectId ? "" : "- **Coverage Agent:** Select an active Katalon project in the context panel for project-backed analysis.\n"}
-
-### 4. CRITICAL RISKS (BLOCKERS)
-- Full QA Director reasoning requires Gosi Brain configuration on the server.
-
-### 5. ACTION PLAN (PRIORITIZED)
-1. Configure \`GOSI_BRAIN_CHAT_URL\` and \`GOSI_BRAIN_API_KEY\` in \`server/.env\`.
-2. Provide URL, locators, or concrete test steps for generation requests.
-
-### 6. GENERATED ARTIFACTS
-None (offline).
-
-— **${SENIOR_QA_ENGINEER_NAME}**`;
+  return respondWithBuiltInIntelligence(message, intent, confidence);
 }
 
 async function seniorQaAnalysisReply(
@@ -132,7 +114,7 @@ async function seniorQaAnalysisReply(
     };
   }
 
-  return advisoryReply(message, ctx, token, model, task);
+  return advisoryReply(message, ctx, token, model, task, route.intent, route.confidence);
 }
 
 interface SupplementaryContext {

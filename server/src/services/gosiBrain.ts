@@ -90,6 +90,19 @@ export async function gosiBrainGenerate(opts: GosiBrainOptions): Promise<{ respo
 
   const model = opts.model?.trim() || modelDefault;
 
+  // Debug: log masked token prefix and body size to help diagnose WAF rejections
+  const jwtPreview = authHeader.replace(/^Bearer\s+/i, "").slice(0, 20);
+  const bodyPayload = JSON.stringify({
+    model,
+    messages: [{ role: "user", content: opts.prompt }],
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 16000,
+    stream: false,
+  });
+  console.log(
+    `[GosiBrain] → ${url} | model=${model} | tokenPrefix=${jwtPreview}… | bodyBytes=${bodyPayload.length}`
+  );
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -100,18 +113,23 @@ export async function gosiBrainGenerate(opts: GosiBrainOptions): Promise<{ respo
       // WSO2 gateway rejects Brotli (415) — Node fetch advertises br by default
       "Accept-Encoding": "gzip, deflate",
       Accept: "application/json",
+      "User-Agent": "KatalonAI/1.0",
     },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: opts.prompt }],
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: Number.isFinite(maxTokens) && maxTokens > 0 ? maxTokens : 16000,
-      stream: false,
-    }),
+    body: bodyPayload,
   });
 
   const rawText = await res.text().catch(() => "");
+  console.log(`[GosiBrain] ← HTTP ${res.status} | bodyBytes=${rawText.length}`);
+
   if (!res.ok) {
+    // Detect WAF HTML rejection (F5 ASM returns 200 or 4xx with HTML body)
+    if (rawText.includes("Request Rejected") || rawText.includes("<title>")) {
+      throw new Error(
+        `Gosi Brain WAF rejected the request (HTTP ${res.status}). ` +
+        `Support ID: ${rawText.match(/support ID[^:]*:\s*([\d]+)/i)?.[1] ?? "unknown"}. ` +
+        `The bearer token or API key may need to be refreshed.`
+      );
+    }
     throw new Error(`Gosi Brain error ${res.status}: ${rawText.slice(0, 800)}`);
   }
 
@@ -119,6 +137,15 @@ export async function gosiBrainGenerate(opts: GosiBrainOptions): Promise<{ respo
   try {
     data = JSON.parse(rawText) as typeof data;
   } catch {
+    // Detect WAF HTML rejection disguised as 200 OK
+    if (rawText.includes("Request Rejected") || rawText.includes("<title>")) {
+      throw new Error(
+        `Gosi Brain WAF rejected the request (HTTP 200 soft-block). ` +
+        `Support ID: ${rawText.match(/support ID[^:]*:\s*([\d]+)/i)?.[1] ?? "unknown"}. ` +
+        `The bearer token scope or API key may be invalid for this endpoint. ` +
+        `Ask your admin to refresh the token or API key.`
+      );
+    }
     throw new Error(`Gosi Brain returned non-JSON (first 200 chars): ${rawText.slice(0, 200)}`);
   }
 
