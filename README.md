@@ -15,7 +15,7 @@ Production-oriented web platform powered by **Gosi Brain** that converts manual 
 | **Refactoring Assistant** | `/refactor` | Maintainability, duplication, wait stability, OR/keyword health recommendations. |
 | **AI Project Generator** | `/project-generator` | Full Katalon project scaffold (.zip) — OR, pages, keywords, suites, docs, health score. |
 | **AI Project Repair** | `/project-repair` | Analyze flaky scripts/locators; preview diffs; safe auto-repairs; download repaired .zip. |
-| **Execution Report** | `/execution-report` | CI pass/fail totals → release readiness, module risk, charts, executive PDF. |
+| **Execution Report** | `/execution-report` | Multi-type QA reports (11 views) + Executive QA Intelligence (12 sections) + **type-matched professional PDFs**. |
 | **Project Intelligence** | Generator panel | Upload `.zip`/`.rar` — reuse OR paths, keywords, Project Analyze, AI memory. |
 | **Video Tutorials** | `/video-tutorials` | Short in-app WebM walkthroughs per feature. |
 | **Documentation** | `/how-to-use` | Searchable user guide for every tab and Gosi Brain tool. |
@@ -33,6 +33,9 @@ Production-oriented web platform powered by **Gosi Brain** that converts manual 
 | **Bilingual chat (English & Arabic)** | Language detection, Arabic intents, and follow-ups (“نعم”, “ماذا عن الحالات السلبية؟”). |
 | **Long conversation memory** | Tiered history, conversation brief, and extracted facts (URLs, topics, platform) across long threads. |
 | **Chat capability examples** | Empty-state examples by category — click to send a full prompt. |
+| **Execution Report tabs (11 report types)** | Switch between Execution, Dashboard, Severity, Failures, Modules, Flows, Flaky, Root cause, Actions, Release, and Executive views — all from one run. |
+| **Executive QA Intelligence (12 sections)** | CTO-ready report with scorecard, failure clusters, root cause categories, module health, action plan, and **mandatory deployment recommendation** (AI when configured, deterministic fallback otherwise). |
+| **Type-matched professional PDFs** | Downloaded PDF matches the selected report type (cover page + KPIs + charts + type-specific sections) with filenames like `…-severity-analysis.pdf`. |
 | **Deploy-safe server build** | `tsconfig.build.json` excludes `*.test.ts` from production `tsc` (no vitest required on deploy). |
 
 ## Gosi Brain enterprise tools (May 2026)
@@ -43,7 +46,7 @@ Production-oriented web platform powered by **Gosi Brain** that converts manual 
 | **AI Refactoring Assistant** | Framework maintainability review — duplication, waits, assertions, OR/keyword drilldowns with before/after previews. |
 | **AI Katalon Project Generator** | Enterprise project scaffold with dependency graph, health score, and downloadable `.zip`. |
 | **AI Project Repair Engine** | Flaky-test and locator analysis; preview diffs; conservative auto-repairs; repaired project export. |
-| **AI Execution Report Generator** | Release readiness (READY / AT_RISK / BLOCKED), module risk, charts, executive PDF — no project upload. |
+| **AI Execution Report Generator** | 11 report types (tabs), deterministic release readiness, module risk + flow impact + flaky insights + root cause cards, and Executive QA Intelligence (12 sections). **PDF export matches the selected report type** — no project upload. |
 | **Enterprise workspace memory** | Semantic memory (flows, locators, repairs) injected into Test Architect Chat with citations. |
 | **Video Tutorials** | ~45s WebM demos per feature with synced duration labels. |
 | **Modern platform shell** | Sidebar navigation, command palette, embedded layouts, API health badge. |
